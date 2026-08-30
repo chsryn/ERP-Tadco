@@ -1,175 +1,115 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <title>Detail Shipment - ERP TADCO</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+@extends('layouts.app')
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
+@section('title', 'Detail Shipment - ERP TADCO')
+@section('page_title', 'Detail Shipment')
+@section('page_subtitle', 'Informasi pengiriman armada dan rincian item barang delivered')
 
-<body class="bg-light">
-<div class="container py-5">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h3 class="mb-0">Detail Shipment</h3>
-            <small class="text-muted">{{ $shipment->shipment_number }}</small>
+@section('content')
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h4 class="fw-bold mb-1"><i class="bi bi-truck me-2 text-primary"></i>Surat Jalan / Shipment: {{ $shipment->shipment_number }}</h4>
+                <p class="text-muted small mb-0">Customer: <span class="fw-bold text-dark">{{ $shipment->deliveryOrder->customer->customer_name ?? '-' }}</span></p>
+            </div>
+            <a href="{{ route('shipments.index') }}" class="btn btn-outline-secondary btn-sm px-3 rounded-pill">
+                <i class="bi bi-arrow-left me-1"></i> Kembali
+            </a>
         </div>
 
-        <a href="{{ route('shipments.index') }}" class="btn btn-secondary">
-            Kembali
-        </a>
-    </div>
+        @if (session('success'))
+            <div class="alert alert-success alert-dismissible fade show rounded-3 shadow-sm border-0 mb-4" role="alert">
+                <i class="bi bi-check-circle-fill me-2"></i>{{ session('success') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
 
-    @if(session('success'))
-        <div class="alert alert-success">
-            {{ session('success') }}
-        </div>
-    @endif
-
-    <div class="card mb-4">
-        <div class="card-header">
-            Informasi Pengiriman
-        </div>
-
-        <div class="card-body">
-            <table class="table table-bordered">
-                <tr>
-                    <th style="width: 250px;">Nomor Shipment</th>
-                    <td>{{ $shipment->shipment_number }}</td>
-                </tr>
-
-                <tr>
-                    <th>Nomor DO</th>
-                    <td>{{ $shipment->deliveryOrder->do_number ?? '-' }}</td>
-                </tr>
-
-                <tr>
-                    <th>Customer</th>
-                    <td>
-                        {{ $shipment->deliveryOrder->customer->customer_code ?? '-' }}
-                        -
-                        {{ $shipment->deliveryOrder->customer->customer_name ?? '-' }}
-                    </td>
-                </tr>
-
-                <tr>
-                    <th>Gudang</th>
-                    <td>{{ $shipment->deliveryOrder->warehouse->warehouse_name ?? '-' }}</td>
-                </tr>
-
-                <tr>
-                    <th>Tanggal Pengiriman</th>
-                    <td>{{ $shipment->shipment_date->format('d/m/Y') }}</td>
-                </tr>
-
-                <tr>
-                    <th>Sopir</th>
-                    <td>{{ $shipment->driver_name ?? '-' }}</td>
-                </tr>
-
-                <tr>
-                    <th>Kendaraan</th>
-                    <td>{{ $shipment->vehicle_no ?? '-' }}</td>
-                </tr>
-
-                <tr>
-                    <th>Status</th>
-                    <td><span class="badge bg-success">{{ $shipment->status }}</span></td>
-                </tr>
-
-                <tr>
-                    <th>Catatan</th>
-                    <td>{{ $shipment->notes ?? '-' }}</td>
-                </tr>
-            </table>
-        </div>
-    </div>
-
-    <div class="card mb-4">
-        <div class="card-header">
-            Item yang Dikirim
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-header bg-white py-3 px-4 border-0 rounded-top-4 d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-info-circle me-2 text-primary"></i>Informasi Pengiriman</h6>
+                <span class="badge bg-success-subtle text-success px-3 py-2 rounded-pill fw-bold">Delivered (Terkirim)</span>
+            </div>
+            <div class="card-body px-4 pb-4">
+                <div class="table-responsive">
+                    <table class="table table-borderless align-middle mb-0">
+                        <tbody>
+                            <tr class="border-bottom border-light">
+                                <th style="width: 220px;" class="text-secondary fw-semibold">Nomor Shipment</th>
+                                <td class="fw-bold text-dark">{{ $shipment->shipment_number }}</td>
+                            </tr>
+                            <tr class="border-bottom border-light">
+                                <th class="text-secondary fw-semibold">Nomor DO Terkait</th>
+                                <td class="fw-bold text-primary">{{ $shipment->deliveryOrder->do_number ?? '-' }}</td>
+                            </tr>
+                            <tr class="border-bottom border-light">
+                                <th class="text-secondary fw-semibold">Customer</th>
+                                <td class="fw-bold text-dark">
+                                    {{ $shipment->deliveryOrder->customer->customer_code ?? '-' }} - {{ $shipment->deliveryOrder->customer->customer_name ?? '-' }}
+                                </td>
+                            </tr>
+                            <tr class="border-bottom border-light">
+                                <th class="text-secondary fw-semibold">Tanggal Pengiriman</th>
+                                <td class="fw-medium text-dark">{{ $shipment->shipment_date->format('d/m/Y') }}</td>
+                            </tr>
+                            <tr class="border-bottom border-light">
+                                <th class="text-secondary fw-semibold">Nama Sopir / Pengemudi</th>
+                                <td class="fw-medium text-dark">{{ $shipment->driver_name ?? '-' }}</td>
+                            </tr>
+                            <tr class="border-bottom border-light">
+                                <th class="text-secondary fw-semibold">No. Plat Kendaraan</th>
+                                <td class="fw-medium text-dark">{{ $shipment->vehicle_no ?? '-' }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-secondary fw-semibold">Catatan Pengiriman</th>
+                                <td>{{ $shipment->notes ?? '-' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
-        <div class="card-body table-responsive">
-            <table class="table table-bordered align-middle">
-                <thead class="table-dark">
-                    <tr>
-                        <th>No</th>
-                        <th>Kode Produk</th>
-                        <th>Nama Produk</th>
-                        <th>Strata</th>
-                        <th class="text-end">Qty</th>
-                        <th class="text-end">Harga</th>
-                        <th class="text-end">Subtotal</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    @foreach($shipment->deliveryOrder->items as $item)
-                        <tr>
-                            <td>{{ $loop->iteration }}</td>
-                            <td>{{ $item->product->product_code ?? '-' }}</td>
-                            <td>{{ $item->product->product_name ?? '-' }}</td>
-                            <td>{{ $item->tier_code }}</td>
-                            <td class="text-end">{{ number_format($item->qty, 2, ',', '.') }}</td>
-                            <td class="text-end">Rp {{ number_format($item->unit_price, 0, ',', '.') }}</td>
-                            <td class="text-end">Rp {{ number_format($item->line_total, 0, ',', '.') }}</td>
-                        </tr>
-                    @endforeach
-                </tbody>
-
-                <tfoot>
-                    <tr>
-                        <th colspan="6" class="text-end">Total DO</th>
-                        <th class="text-end">
-                            Rp {{ number_format($shipment->deliveryOrder->total_amount, 0, ',', '.') }}
-                        </th>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="card-header">
-            Riwayat Stock Movement
-        </div>
-
-        <div class="card-body table-responsive">
-            <table class="table table-bordered align-middle">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Tanggal</th>
-                        <th>Gudang</th>
-                        <th>Produk</th>
-                        <th>Jenis</th>
-                        <th class="text-end">Qty</th>
-                        <th>Catatan</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    @forelse($stockMovements as $movement)
-                        <tr>
-                            <td>{{ $movement->movement_date->format('d/m/Y H:i') }}</td>
-                            <td>{{ $movement->warehouse->warehouse_name ?? '-' }}</td>
-                            <td>{{ $movement->product->product_name ?? '-' }}</td>
-                            <td><span class="badge bg-danger">{{ $movement->movement_type }}</span></td>
-                            <td class="text-end">{{ number_format($movement->qty, 2, ',', '.') }}</td>
-                            <td>{{ $movement->notes ?? '-' }}</td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="6" class="text-center text-muted">
-                                Belum ada stock movement.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-header bg-white py-3 px-4 border-0 rounded-top-4">
+                <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-box me-2 text-success"></i>Item Barang yang Dikirim</h6>
+            </div>
+            <div class="card-body px-4 pb-4">
+                <div class="table-responsive">
+                    <table class="table table-hover table-bordered border-light align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 50px;">No</th>
+                                <th>Kode Produk</th>
+                                <th>Nama Produk</th>
+                                <th class="text-end">Diskon (%)</th>
+                                <th class="text-end">Qty Dikirim</th>
+                                <th class="text-end">Harga Dasar</th>
+                                <th class="text-end">Harga Bersih</th>
+                                <th class="text-end">Total Line</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($shipment->deliveryOrder->items as $index => $item)
+                                <tr>
+                                    <td>{{ $index + 1 }}</td>
+                                    <td class="fw-medium">{{ $item->product->product_code ?? '-' }}</td>
+                                    <td class="fw-semibold text-dark">{{ $item->product->product_name ?? '-' }}</td>
+                                    <td class="text-end text-secondary">{{ number_format((float) ($item->discount_percentage ?? 0), 0, ',', '.') }}%</td>
+                                    <td class="text-end fw-bold text-success">{{ number_format($item->qty, 0, ',', '.') }}</td>
+                                    <td class="text-end text-secondary">Rp {{ number_format((float) ($item->base_price ?? 0), 0, ',', '.') }}</td>
+                                    <td class="text-end text-secondary">Rp {{ number_format((float) ($item->final_price ?? 0), 0, ',', '.') }}</td>
+                                    <td class="text-end fw-bold text-dark">Rp {{ number_format($item->line_total, 0, ',', '.') }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted py-4">Belum ada rincian item.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
-</body>
-</html>
+@endsection

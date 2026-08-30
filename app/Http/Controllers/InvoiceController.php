@@ -2,16 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreInvoiceRequest;
 use App\Models\DeliveryOrder;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
+use App\Services\InvoiceService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class InvoiceController extends Controller
 {
+    public function __construct(
+        protected InvoiceService $invoiceService
+    ) {}
+
     public function index(Request $request)
     {
         $search = $request->get('search');
@@ -49,106 +54,22 @@ class InvoiceController extends Controller
         return view('invoices.create', compact('deliveryOrders'));
     }
 
-    public function store(Request $request)
+    public function store(StoreInvoiceRequest $request)
     {
-        $validated = $request->validate([
-            'delivery_order_id' => ['required', 'exists:delivery_orders,id'],
-            'invoice_date' => ['required', 'date'],
-            'payment_term_days' => ['nullable', 'integer', 'min:0'],
-            'due_date' => ['nullable', 'date'],
-            'notes' => ['nullable', 'string'],
-        ]);
+        try {
+            $this->invoiceService->createInvoice(
+                $request->validated(),
+                auth()->id()
+            );
 
-        DB::transaction(function () use ($validated) {
-            $deliveryOrder = DeliveryOrder::query()
-                ->where('id', '=', $validated['delivery_order_id'])
-                ->lockForUpdate()
-                ->first();
-
-            if (!$deliveryOrder) {
-                throw ValidationException::withMessages([
-                    'delivery_order_id' => 'Delivery Order tidak ditemukan.',
-                ]);
-            }
-
-            if ($deliveryOrder->status !== 'shipped') {
-                throw ValidationException::withMessages([
-                    'delivery_order_id' => 'Invoice hanya bisa dibuat dari DO yang sudah shipped.',
-                ]);
-            }
-
-            $existingInvoice = Invoice::query()
-                ->where('delivery_order_id', '=', $deliveryOrder->id)
-                ->first();
-
-            if ($existingInvoice) {
-                throw ValidationException::withMessages([
-                    'delivery_order_id' => 'DO ini sudah pernah dibuatkan invoice.',
-                ]);
-            }
-
-            $deliveryOrder->load(['items.product']);
-
-            if ($deliveryOrder->items->isEmpty()) {
-                throw ValidationException::withMessages([
-                    'delivery_order_id' => 'DO tidak memiliki item.',
-                ]);
-            }
-
-            $subtotal = 0;
-
-            foreach ($deliveryOrder->items as $item) {
-                $subtotal += (float) $item->line_total;
-            }
-
-            $discountTotal = 0;
-            $grandTotal = $subtotal - $discountTotal;
-
-            $invoiceDate = Carbon::parse($validated['invoice_date']);
-
-            $paymentTermDays = $validated['payment_term_days'] ?? null;
-
-            if (!empty($validated['due_date'])) {
-                $dueDate = Carbon::parse($validated['due_date']);
-            } elseif ($paymentTermDays !== null) {
-                $dueDate = $invoiceDate->copy()->addDays((int) $paymentTermDays);
-            } else {
-                $dueDate = null;
-            }
-
-            $invoice = Invoice::query()->create([
-                'invoice_number' => $this->generateInvoiceNumber(),
-                'delivery_order_id' => $deliveryOrder->id,
-                'customer_id' => $deliveryOrder->customer_id,
-                'invoice_date' => $invoiceDate->format('Y-m-d'),
-                'payment_term_days' => $paymentTermDays,
-                'due_date' => $dueDate?->format('Y-m-d'),
-                'subtotal' => $subtotal,
-                'discount_total' => $discountTotal,
-                'grand_total' => $grandTotal,
-                'paid_total' => 0,
-                'receivable_amount' => $grandTotal,
-                'status' => 'unpaid',
-                'notes' => $validated['notes'] ?? null,
-                'created_by' => auth()->id(),
-            ]);
-
-            foreach ($deliveryOrder->items as $item) {
-                InvoiceItem::query()->create([
-                    'invoice_id' => $invoice->id,
-                    'product_id' => $item->product_id,
-                    'tier_code' => $item->tier_code,
-                    'qty' => $item->qty,
-                    'unit_price' => $item->unit_price,
-                    'discount_rate' => $item->discount_rate,
-                    'line_total' => $item->line_total,
-                ]);
-            }
-        });
-
-        return redirect()
-            ->route('invoices.index')
-            ->with('success', 'Invoice berhasil dibuat dari DO yang sudah shipped.');
+            return redirect()
+                ->route('invoices.index')
+                ->with('success', 'Invoice berhasil dibuat dari DO yang sudah shipped.');
+        } catch (ValidationException $e) {
+            return back()
+                ->withErrors($e->errors())
+                ->withInput();
+        }
     }
 
     public function show(Invoice $invoice)
@@ -178,23 +99,111 @@ class InvoiceController extends Controller
 
     public function destroy(Invoice $invoice)
     {
-        if ((float) $invoice->paid_total > 0) {
-            return back()->withErrors([
-                'invoice' => 'Invoice yang sudah memiliki pembayaran tidak bisa dibatalkan.',
-            ]);
+        try {
+            $this->invoiceService->cancelInvoice($invoice);
+
+            return redirect()
+                ->route('invoices.index')
+                ->with('success', 'Invoice berhasil dibatalkan.');
+        } catch (ValidationException $e) {
+            return back()->withErrors($e->errors());
         }
-
-        $invoice->update([
-            'status' => 'cancelled',
-        ]);
-
-        return redirect()
-            ->route('invoices.index')
-            ->with('success', 'Invoice berhasil dibatalkan.');
     }
 
-    private function generateInvoiceNumber(): string
+    public function exportExcel(Invoice $invoice)
     {
-        return 'INV-' . now()->format('YmdHis') . '-' . random_int(100, 999);
+        // Pastikan relasi diload
+        $invoice->load(['customer', 'items.product']);
+
+        // Path ke template
+        $templatePath = storage_path('app/templates/invoice_template.xlsx');
+
+        if (!file_exists($templatePath)) {
+            return back()->with('error', 'Template Excel tidak ditemukan di storage/app/templates/');
+        }
+
+        // Load Template
+        $spreadsheet = IOFactory::load($templatePath);
+        $sheet = $spreadsheet->getActiveSheet();
+
+        // 1. Isi Header Invoice
+        $sheet->setCellValue('H4', Carbon::parse($invoice->invoice_date)->format('Y-m-d'));
+        $sheet->setCellValue('H5', $invoice->invoice_number);
+        $sheet->setCellValue('H6', $invoice->payment_term_days ?? 14);
+        $sheet->setCellValue('H7', Carbon::parse($invoice->due_date)->format('Y-m-d'));
+
+        // 2. Isi Data Customer
+        $sheet->setCellValue('A10', strtoupper($invoice->customer->customer_name ?? 'UMUM'));
+        if ($invoice->customer && $invoice->customer->address) {
+            $sheet->setCellValue('A11', $invoice->customer->address);
+        }
+
+        // 3. Isi Daftar Item Barang
+        $startRow = 15; // Baris awal item di template
+        $currentRow = $startRow;
+
+        foreach ($invoice->items as $index => $item) {
+            // Jika item lebih dari 1, sisipkan baris baru agar rumus Footer di bawahnya tidak tertimpa
+            if ($index > 0) {
+                $sheet->insertNewRowBefore($currentRow, 1);
+            }
+
+            $productName = $item->product ? $item->product->product_name : 'Item Tidak Dikenal';
+            $productCode = $item->product ? $item->product->product_code : '-';
+
+            $sheet->setCellValue('A' . $currentRow, $productName);
+            $sheet->setCellValue('C' . $currentRow, $item->tier_code ?? ''); // Strata
+            $sheet->setCellValue('D' . $currentRow, $productCode);
+            $sheet->setCellValue('E' . $currentRow, ($item->discount_percentage ?? 0) / 100); // Diskon
+            $sheet->setCellValue('F' . $currentRow, $item->base_price ?? 0);
+            $sheet->setCellValue('G' . $currentRow, $item->qty ?? 0);
+            $sheet->setCellValue('H' . $currentRow, $item->line_total ?? 0);
+
+            $currentRow++;
+        }
+
+        // Generate dan Download File
+        $fileName = 'Invoice_' . str_replace('/', '_', $invoice->invoice_number) . '.xlsx';
+        $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'max-age=0',
+        ]);
+    }
+
+    public function quickPay(\Illuminate\Http\Request $request, \App\Models\Invoice $invoice)
+    {
+        $request->validate([
+            'payment_date' => ['required', 'date'],
+            'amount' => ['required', 'numeric', 'min:1'],
+            'payment_method' => ['required', 'string'],
+        ]);
+
+        if ($invoice->status === 'paid' || $invoice->receivable_amount <= 0) return back()->with('error', 'Invoice lunas.');
+        if ($request->amount > $invoice->receivable_amount) return back()->with('error', 'Lebih dari sisa tagihan.');
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($request, $invoice) {
+            \App\Models\Payment::create([
+                'payment_number' => 'PAY-' . now()->format('YmdHis') . '-' . random_int(100, 999),
+                'invoice_id' => $invoice->id,
+                'payment_date' => $request->payment_date,
+                'payment_method' => $request->payment_method,
+                'amount' => $request->amount,
+                'notes' => 'Pembayaran cepat dari UI',
+                'created_by' => auth()->id(),
+            ]);
+
+            $newPaidTotal = $invoice->paid_total + $request->amount;
+            $newReceivable = $invoice->grand_total - $newPaidTotal;
+            $invoice->update([
+                'paid_total' => $newPaidTotal,
+                'receivable_amount' => $newReceivable,
+                'status' => $newReceivable <= 0 ? 'paid' : 'unpaid',
+            ]);
+        });
+        return back()->with('success', 'Pembayaran berhasil dicatat!');
     }
 }

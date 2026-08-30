@@ -1,109 +1,101 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <title>Adjustment Stok - ERP TADCO</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+@extends('layouts.app')
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
+@section('title', 'Adjustment Stok - ERP TADCO')
+@section('page_title', 'Adjustment Stok Fisik')
+@section('page_subtitle', 'Input transaksi stok masuk/keluar di luar transaksi DO biasa')
 
-<body class="bg-light">
-<div class="container py-5">
-    <div class="mb-4">
-        <h3 class="mb-0">Adjustment Stok</h3>
-        <small class="text-muted">Catat barang masuk, barang keluar, rusak, retur, atau penyesuaian manual</small>
-    </div>
+@section('page_action')
+<a href="{{ route('inventory.index') }}" class="btn btn-outline-secondary btn-sm px-3 rounded-pill">
+    <i class="bi bi-arrow-left me-1"></i> Kembali
+</a>
+@endsection
 
-    @if($errors->any())
-        <div class="alert alert-danger">
-            <strong>Terjadi kesalahan:</strong>
-            <ul class="mb-0">
-                @foreach($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
-            </ul>
-        </div>
-    @endif
+@section('content')
 
-    <form action="{{ route('inventory.adjustment.store') }}" method="POST" class="card">
-        @csrf
-
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Gudang</label>
-                    <select name="warehouse_id" class="form-select" required>
-                        <option value="">-- Pilih Gudang --</option>
-                        @foreach($warehouses as $warehouse)
-                            <option value="{{ $warehouse->id }}" {{ old('warehouse_id') == $warehouse->id ? 'selected' : '' }}>
-                                {{ $warehouse->warehouse_code }} - {{ $warehouse->warehouse_name }}
-                            </option>
-                        @endforeach
-                    </select>
+        @if ($errors->any())
+            <div class="alert alert-danger alert-dismissible fade show rounded-3 shadow-sm border-0 mb-4" role="alert">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+                    <div>
+                        <strong class="d-block">Terjadi kesalahan validasi:</strong>
+                        <ul class="mb-0 ps-3 small">
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
                 </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
 
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Produk</label>
-                    <select name="product_id" class="form-select" required>
-                        <option value="">-- Pilih Produk --</option>
-                        @foreach($products as $product)
-                            <option value="{{ $product->id }}" {{ old('product_id') == $product->id ? 'selected' : '' }}>
-                                {{ $product->product_code }} - {{ $product->product_name }}
-                            </option>
-                        @endforeach
-                    </select>
+        <form action="{{ route('inventory.adjustment.store') }}" method="POST">
+            @csrf
+
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-header bg-white py-3 px-4 border-0 rounded-top-4">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-box-seam me-2 text-primary"></i>Form Penyesuaian Stok</h6>
                 </div>
+                <div class="card-body px-4 pb-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small text-secondary">Gudang Target <span class="text-danger">*</span></label>
+                            <select name="warehouse_id" class="form-select bg-light" required>
+                                @foreach ($warehouses as $wh)
+                                    <option value="{{ $wh->id }}" {{ old('warehouse_id') == $wh->id ? 'selected' : '' }}>
+                                        {{ $wh->warehouse_code }} - {{ $wh->warehouse_name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
 
-                <div class="col-md-4 mb-3">
-                    <label class="form-label">Jenis Pergerakan</label>
-                    <select name="movement_type" class="form-select" required>
-                        <option value="">-- Pilih Jenis --</option>
-                        <option value="in" {{ old('movement_type') == 'in' ? 'selected' : '' }}>Barang Masuk</option>
-                        <option value="out" {{ old('movement_type') == 'out' ? 'selected' : '' }}>Barang Keluar</option>
-                        <option value="return" {{ old('movement_type') == 'return' ? 'selected' : '' }}>Retur Masuk</option>
-                        <option value="damage" {{ old('movement_type') == 'damage' ? 'selected' : '' }}>Barang Rusak</option>
-                        <option value="adjustment_in" {{ old('movement_type') == 'adjustment_in' ? 'selected' : '' }}>Adjustment Tambah</option>
-                        <option value="adjustment_out" {{ old('movement_type') == 'adjustment_out' ? 'selected' : '' }}>Adjustment Kurang</option>
-                    </select>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small text-secondary">Pilih Produk <span class="text-danger">*</span></label>
+                            <select name="product_id" class="form-select bg-light" required>
+                                <option value="">-- Pilih Produk --</option>
+                                @foreach ($products as $product)
+                                    <option value="{{ $product->id }}" {{ old('product_id') == $product->id ? 'selected' : '' }}>
+                                        {{ $product->product_code }} - {{ $product->product_name }} [{{ strtoupper($product->uom ?? 'BOX') }}]
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small text-secondary">Jenis Pergerakan <span class="text-danger">*</span></label>
+                            <select name="movement_type" class="form-select bg-light" required>
+                                <option value="in" {{ old('movement_type') === 'in' ? 'selected' : '' }}>Stok Masuk (Penerimaan / Restock)</option>
+                                <option value="out" {{ old('movement_type') === 'out' ? 'selected' : '' }}>Stok Keluar (Pemakaian)</option>
+                                <option value="damage" {{ old('movement_type') === 'damage' ? 'selected' : '' }}>Barang Rusak / Afkir</option>
+                                <option value="return" {{ old('movement_type') === 'return' ? 'selected' : '' }}>Retur Masuk</option>
+                                <option value="adjustment" {{ old('movement_type') === 'adjustment' ? 'selected' : '' }}>Adjustment Opname (Penyesuaian Fisik)</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small text-secondary">Tanggal Pergerakan <span class="text-danger">*</span></label>
+                            <input type="date" name="movement_date" class="form-control bg-light" value="{{ old('movement_date', now()->format('Y-m-d')) }}" required>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small text-secondary">Jumlah (Qty) <span class="text-danger">*</span></label>
+                            <input type="number" step="1" min="1" name="qty" class="form-control bg-light" value="{{ old('qty') }}" placeholder="0" required>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small text-secondary">Alasan / Catatan Penyesuaian</label>
+                            <textarea name="notes" class="form-control bg-light" rows="3" placeholder="Alasan penyesuaian stok (contoh: Barang rusak saat bongkar muat / Hasil stok opname bulanan)...">{{ old('notes') }}</textarea>
+                        </div>
+                    </div>
                 </div>
-
-                <div class="col-md-4 mb-3">
-                    <label class="form-label">Jumlah Qty</label>
-                    <input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        name="qty"
-                        class="form-control"
-                        value="{{ old('qty') }}"
-                        required
-                    >
-                </div>
-
-                <div class="col-md-4 mb-3">
-                    <label class="form-label">Tanggal Pergerakan</label>
-                    <input
-                        type="datetime-local"
-                        name="movement_date"
-                        class="form-control"
-                        value="{{ old('movement_date', now()->format('Y-m-d\TH:i')) }}"
-                        required
-                    >
-                </div>
-
-                <div class="col-md-12 mb-3">
-                    <label class="form-label">Catatan</label>
-                    <textarea name="notes" class="form-control" rows="3">{{ old('notes') }}</textarea>
+                <div class="card-footer bg-white py-3 px-4 border-top border-light d-flex justify-content-between align-items-center rounded-bottom-4">
+                    <a href="{{ route('inventory.index') }}" class="btn btn-light px-4 rounded-pill fw-medium">Batal</a>
+                    <button type="submit" class="btn btn-primary px-5 rounded-pill fw-semibold shadow-sm">
+                        <i class="bi bi-check-circle me-1"></i> Simpan Adjustment
+                    </button>
                 </div>
             </div>
-        </div>
-
-        <div class="card-footer d-flex justify-content-between">
-            <a href="{{ route('inventory.index') }}" class="btn btn-secondary">Kembali</a>
-            <button type="submit" class="btn btn-primary">Simpan Adjustment</button>
-        </div>
-    </form>
+        </form>
+    </div>
 </div>
-</body>
-</html>
+@endsection

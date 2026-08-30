@@ -23,8 +23,8 @@ return new class extends Migration
             $table->string('driver_name', 100)->nullable();
             $table->string('vehicle_no', 50)->nullable();
 
-            $table->string('status', 30)->default('delivered');
-            // delivered
+            $table->string('status', 30)->default('shipped');
+            // shipped, received, cancelled
 
             $table->text('notes')->nullable();
 

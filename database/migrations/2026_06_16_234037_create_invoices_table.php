@@ -27,13 +27,12 @@ return new class extends Migration
             $table->date('due_date')->nullable();
 
             $table->decimal('subtotal', 15, 2)->default(0);
-            $table->decimal('discount_total', 15, 2)->default(0);
             $table->decimal('grand_total', 15, 2)->default(0);
             $table->decimal('paid_total', 15, 2)->default(0);
             $table->decimal('receivable_amount', 15, 2)->default(0);
 
             $table->string('status', 30)->default('unpaid');
-            // unpaid, partial_paid, paid, overdue, cancelled
+            // unpaid, paid, overdue, cancelled
 
             $table->text('notes')->nullable();
 

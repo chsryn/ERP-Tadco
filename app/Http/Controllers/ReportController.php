@@ -16,7 +16,36 @@ class ReportController extends Controller
 {
     public function index()
     {
-        return view('reports.index');
+        // 1. Data Grafik Stok
+        $totalAvailable = StockBalance::query()->sum('qty_available');
+        $totalReserved = StockBalance::query()->sum('qty_reserved');
+        $lowStockCount = StockBalance::query()->where('qty_available', '<=', 10)->count();
+
+        // 2. Data Grafik Penjualan
+        $totalSales = Invoice::query()->sum('grand_total');
+        $totalPaid = Invoice::query()->sum('paid_total');
+        $totalReceivable = Invoice::query()->sum('receivable_amount');
+
+        // 3. Data Grafik Piutang
+        $unpaidAmount = Invoice::query()->where('status', 'unpaid')->sum('receivable_amount');
+        $partialPaidAmount = 0;
+
+        $overdueAmount = Invoice::query()
+            ->where('status', 'unpaid')
+            ->whereNotNull('due_date')
+            ->where('due_date', '<', now()->toDateString())
+            ->sum('receivable_amount');
+
+        // 4. Data Grafik Pembayaran
+        $cashPayments = Payment::query()->where('payment_method', 'cash')->sum('amount');
+        $transferPayments = Payment::query()->where('payment_method', 'transfer')->sum('amount');
+
+        return view('reports.index', compact(
+            'totalAvailable', 'totalReserved', 'lowStockCount',
+            'totalSales', 'totalPaid', 'totalReceivable',
+            'unpaidAmount', 'partialPaidAmount', 'overdueAmount',
+            'cashPayments', 'transferPayments'
+        ));
     }
 
     public function stock(Request $request)
@@ -128,7 +157,6 @@ class ReportController extends Controller
             ->where('receivable_amount', '>', 0)
             ->where(function ($q) {
                 $q->where('status', '=', 'unpaid')
-                    ->orWhere('status', '=', 'partial_paid')
                     ->orWhere('status', '=', 'overdue');
             });
 
@@ -219,35 +247,36 @@ class ReportController extends Controller
             'totalPayment'
         ));
     }
+
     public function exportStock(Request $request)
-{
-    return Excel::download(
-        new StockReportExport($request->only(['search', 'low_stock_only'])),
-        'laporan_stok_' . now()->format('Ymd_His') . '.xlsx'
-    );
-}
+    {
+        return Excel::download(
+            new StockReportExport($request->only(['search', 'low_stock_only'])),
+            'laporan_stok_' . now()->format('Ymd_His') . '.xlsx'
+        );
+    }
 
-public function exportSales(Request $request)
-{
-    return Excel::download(
-        new SalesReportExport($request->only(['search', 'status', 'start_date', 'end_date'])),
-        'laporan_penjualan_' . now()->format('Ymd_His') . '.xlsx'
-    );
-}
+    public function exportSales(Request $request)
+    {
+        return Excel::download(
+            new SalesReportExport($request->only(['search', 'status', 'start_date', 'end_date'])),
+            'laporan_penjualan_' . now()->format('Ymd_His') . '.xlsx'
+        );
+    }
 
-public function exportReceivables(Request $request)
-{
-    return Excel::download(
-        new ReceivablesReportExport($request->only(['search', 'status', 'overdue_only'])),
-        'laporan_piutang_' . now()->format('Ymd_His') . '.xlsx'
-    );
-}
+    public function exportReceivables(Request $request)
+    {
+        return Excel::download(
+            new ReceivablesReportExport($request->only(['search', 'status', 'overdue_only'])),
+            'laporan_piutang_' . now()->format('Ymd_His') . '.xlsx'
+        );
+    }
 
-public function exportPayments(Request $request)
-{
-    return Excel::download(
-        new PaymentsReportExport($request->only(['search', 'payment_method', 'start_date', 'end_date'])),
-        'laporan_pembayaran_' . now()->format('Ymd_His') . '.xlsx'
-    );
-}
+    public function exportPayments(Request $request)
+    {
+        return Excel::download(
+            new PaymentsReportExport($request->only(['search', 'payment_method', 'start_date', 'end_date'])),
+            'laporan_pembayaran_' . now()->format('Ymd_His') . '.xlsx'
+        );
+    }
 }

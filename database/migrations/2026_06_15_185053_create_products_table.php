@@ -12,8 +12,9 @@ return new class extends Migration
             $table->id();
             $table->string('product_code', 50)->unique();
             $table->string('product_name', 200);
-            $table->string('uom', 30)->nullable();
-            $table->string('uom_secondary', 30)->nullable();
+            $table->decimal('base_price', 15, 2)->default(0);
+            $table->enum('uom', ['BOX', 'SACK'])->default('BOX');
+            $table->string('net_weight')->nullable();
             $table->string('segment', 150)->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();

@@ -15,19 +15,20 @@ class InventoryController extends Controller
     {
         $search = $request->get('search');
 
-        $stockBalances = StockBalance::with(['product', 'warehouse'])
+        $stocks = StockBalance::with(['product', 'warehouse'])
             ->when($search, function ($query, $search) {
                 $query->whereHas('product', function ($q) use ($search) {
                     $q->where('product_code', 'like', "%{$search}%")
                         ->orWhere('product_name', 'like', "%{$search}%")
-                        ->orWhere('segment', 'like', "%{$search}%");
+                        ->orWhere('segment', 'like', "%{$search}%")
+                        ->orWhere('uom', 'like', "%{$search}%");
                 });
             })
             ->orderBy('product_id')
             ->paginate(10)
             ->withQueryString();
 
-        return view('inventory.index', compact('stockBalances', 'search'));
+        return view('inventory.index', compact('stocks', 'search'));
     }
 
     public function show(StockBalance $stockBalance)
@@ -60,10 +61,17 @@ class InventoryController extends Controller
 
     public function storeAdjustment(Request $request)
     {
+        if (!$request->filled('warehouse_id')) {
+            $defaultWarehouse = Warehouse::query()->first();
+            if ($defaultWarehouse) {
+                $request->merge(['warehouse_id' => $defaultWarehouse->id]);
+            }
+        }
+
         $validated = $request->validate([
             'warehouse_id' => ['required', 'exists:warehouses,id'],
             'product_id' => ['required', 'exists:products,id'],
-            'movement_type' => ['required', 'in:in,out,return,damage,adjustment_in,adjustment_out'],
+            'movement_type' => ['required', 'in:in,out,return,damage,adjustment,adjustment_in,adjustment_out'],
             'qty' => ['required', 'numeric', 'min:0.01'],
             'movement_date' => ['required', 'date'],
             'notes' => ['nullable', 'string'],
@@ -84,7 +92,7 @@ class InventoryController extends Controller
             $qty = (float) $validated['qty'];
             $movementType = $validated['movement_type'];
 
-            $increaseTypes = ['in', 'return', 'adjustment_in'];
+            $increaseTypes = ['in', 'return', 'adjustment', 'adjustment_in'];
             $decreaseTypes = ['out', 'damage', 'adjustment_out'];
 
             if (in_array($movementType, $increaseTypes, true)) {

@@ -9,17 +9,18 @@ class DeliveryOrderItem extends Model
     protected $fillable = [
         'delivery_order_id',
         'product_id',
-        'tier_code',
         'qty',
-        'unit_price',
-        'discount_rate',
+        'base_price',
+        'discount_percentage',
+        'final_price',
         'line_total',
     ];
 
     protected $casts = [
-        'qty' => 'decimal:2',
-        'unit_price' => 'decimal:2',
-        'discount_rate' => 'decimal:5',
+        'qty' => 'integer',
+        'base_price' => 'decimal:2',
+        'discount_percentage' => 'decimal:2',
+        'final_price' => 'decimal:2',
         'line_total' => 'decimal:2',
     ];
 

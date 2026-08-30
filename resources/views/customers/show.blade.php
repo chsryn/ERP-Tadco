@@ -1,93 +1,65 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <title>Detail Customer - ERP TADCO</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+@extends('layouts.app')
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
+@section('title', 'Detail Customer - ERP TADCO')
+@section('page_title', 'Detail Customer')
+@section('page_subtitle', 'Profil identitas dan alamat lokasi pelanggan')
 
-<body class="bg-light">
-<div class="container py-5">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h3 class="mb-0">Detail Customer</h3>
-            <small class="text-muted">{{ $customer->customer_code }} - {{ $customer->customer_name }}</small>
+@section('content')
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h4 class="fw-bold mb-1"><i class="bi bi-person-vcard me-2 text-primary"></i>{{ $customer->customer_name }}</h4>
+                <p class="text-muted small mb-0">Kode Customer: <span class="badge bg-secondary">{{ $customer->customer_code }}</span></p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ route('customers.edit', $customer) }}" class="btn btn-warning btn-sm px-3 rounded-pill text-dark fw-semibold">
+                    <i class="bi bi-pencil me-1"></i> Edit Customer
+                </a>
+                <a href="{{ route('customers.index') }}" class="btn btn-outline-secondary btn-sm px-3 rounded-pill">
+                    <i class="bi bi-arrow-left me-1"></i> Kembali
+                </a>
+            </div>
         </div>
 
-        <div>
-            <a href="{{ route('customers.edit', $customer) }}" class="btn btn-warning">Edit</a>
-            <a href="{{ route('customers.index') }}" class="btn btn-secondary">Kembali</a>
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="card-body">
-            <table class="table table-bordered">
-                <tr>
-                    <th style="width: 250px;">Kode Customer</th>
-                    <td>{{ $customer->customer_code }}</td>
-                </tr>
-
-                <tr>
-                    <th>Nama Customer</th>
-                    <td>{{ $customer->customer_name }}</td>
-                </tr>
-
-                <tr>
-                    <th>Provinsi</th>
-                    <td>{{ $customer->province }}</td>
-                </tr>
-
-                <tr>
-                    <th>Kota/Kabupaten</th>
-                    <td>{{ $customer->city }}</td>
-                </tr>
-
-                <tr>
-                    <th>Kecamatan</th>
-                    <td>{{ $customer->district }}</td>
-                </tr>
-
-                <tr>
-                    <th>Kelurahan/Desa</th>
-                    <td>{{ $customer->sub_district }}</td>
-                </tr>
-
-                <tr>
-                    <th>Alamat</th>
-                    <td>{{ $customer->address }}</td>
-                </tr>
-
-                <tr>
-                    <th>Jenis Usaha</th>
-                    <td>{{ $customer->type_of_business }}</td>
-                </tr>
-
-                <tr>
-                    <th>Market</th>
-                    <td>{{ $customer->market }}</td>
-                </tr>
-
-                <tr>
-                    <th>Tipe Customer</th>
-                    <td>{{ $customer->customer_type }}</td>
-                </tr>
-
-                <tr>
-                    <th>Status</th>
-                    <td>
-                        @if($customer->is_active)
-                            <span class="badge bg-success">Aktif</span>
-                        @else
-                            <span class="badge bg-secondary">Nonaktif</span>
-                        @endif
-                    </td>
-                </tr>
-            </table>
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-header bg-white py-3 px-4 border-0 rounded-top-4 d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-info-circle me-2 text-primary"></i>Informasi Customer</h6>
+                <div>
+                    @if($customer->is_active)
+                        <span class="badge bg-success-subtle text-success px-3 py-2 rounded-pill"><i class="bi bi-check-circle-fill me-1"></i> Customer Aktif</span>
+                    @else
+                        <span class="badge bg-secondary-subtle text-secondary px-3 py-2 rounded-pill"><i class="bi bi-x-circle-fill me-1"></i> Nonaktif</span>
+                    @endif
+                </div>
+            </div>
+            <div class="card-body px-4 pb-4">
+                <div class="table-responsive">
+                    <table class="table table-borderless align-middle mb-0">
+                        <tbody>
+                            <tr class="border-bottom border-light">
+                                <th style="width: 220px;" class="text-secondary fw-semibold">Kode Customer</th>
+                                <td class="fw-bold text-dark">{{ $customer->customer_code }}</td>
+                            </tr>
+                            <tr class="border-bottom border-light">
+                                <th class="text-secondary fw-semibold">Nama Customer</th>
+                                <td class="fw-bold text-dark">{{ $customer->customer_name }}</td>
+                            </tr>
+                            <tr class="border-bottom border-light">
+                                <th class="text-secondary fw-semibold">Wilayah</th>
+                                <td>
+                                    {{ implode(', ', array_filter([$customer->sub_district, $customer->district, $customer->city, $customer->province])) ?: '-' }}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th class="text-secondary fw-semibold">Alamat Lengkap</th>
+                                <td>{{ $customer->address ?? '-' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
-</body>
-</html>
+@endsection

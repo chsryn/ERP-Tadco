@@ -10,6 +10,7 @@ class Shipment extends Model
         'shipment_number',
         'delivery_order_id',
         'shipment_date',
+        'received_date',
         'driver_name',
         'vehicle_no',
         'status',
@@ -19,6 +20,7 @@ class Shipment extends Model
 
     protected $casts = [
         'shipment_date' => 'date',
+        'received_date' => 'date',
     ];
 
     public function deliveryOrder()

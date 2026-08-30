@@ -32,36 +32,24 @@ class UserController extends Controller
     public function create()
     {
         $roles = Role::orderBy('name')->get();
-
         return view('users.create', compact('roles'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-
             'name' => 'required|max:100',
-
             'email' => 'required|email|unique:users,email',
-
             'password' => 'required|confirmed|min:6',
-
             'role' => 'required|exists:roles,name',
-
             'is_active' => 'required|boolean',
-
         ]);
 
         $user = User::create([
-
             'name' => $validated['name'],
-
             'email' => $validated['email'],
-
             'password' => Hash::make($validated['password']),
-
             'is_active' => $validated['is_active'],
-
         ]);
 
         $user->assignRole($validated['role']);
@@ -74,45 +62,51 @@ class UserController extends Controller
     public function show(User $user)
     {
         $user->load('roles');
-
         return view('users.show', compact('user'));
     }
 
     public function edit(User $user)
     {
         $roles = Role::orderBy('name')->get();
-
         return view('users.edit', compact('user', 'roles'));
     }
 
     public function update(Request $request, User $user)
     {
-        $validated = $request->validate([
-
+        // Setup validasi dasar
+        $rules = [
             'name' => 'required|max:100',
-
             'email' => [
                 'required',
                 'email',
                 Rule::unique('users')->ignore($user->id),
             ],
-
             'role' => 'required|exists:roles,name',
-
             'is_active' => 'required|boolean',
+        ];
 
-        ]);
+        // Jika password diisi, maka validasi password dijalankan
+        if ($request->filled('password')) {
+            $rules['password'] = 'required|confirmed|min:6';
+        }
 
-        $user->update([
+        $validated = $request->validate($rules);
 
+        // Data yang pasti diupdate
+        $updateData = [
             'name' => $validated['name'],
-
             'email' => $validated['email'],
-
             'is_active' => $validated['is_active'],
+        ];
 
-        ]);
+        // Jika password diisi, enkripsi dan masukkan ke data update
+        if ($request->filled('password')) {
+            $updateData['password'] = Hash::make($validated['password']);
+        }
 
+        $user->update($updateData);
+
+        // Update Role
         $user->syncRoles([$validated['role']]);
 
         return redirect()
@@ -127,8 +121,7 @@ class UserController extends Controller
                 'user' => 'Anda tidak dapat menghapus akun sendiri.',
             ]);
         }
-
-        $user->delete();
+        User::destroy($user->id);
 
         return redirect()
             ->route('users.index')

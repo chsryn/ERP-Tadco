@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
-use App\Models\ProductPrice;
+use App\Models\ProductDiscount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -14,11 +14,13 @@ class ProductController extends Controller
     {
         $search = $request->get('search');
 
-        $products = Product::with('prices')
+        $products = Product::with('discounts')
             ->when($search, function ($query, $search) {
                 $query->where('product_code', 'like', "%{$search}%")
                     ->orWhere('product_name', 'like', "%{$search}%")
-                    ->orWhere('segment', 'like', "%{$search}%");
+                    ->orWhere('segment', 'like', "%{$search}%")
+                    ->orWhere('uom', 'like', "%{$search}%")
+                    ->orWhere('net_weight', 'like', "%{$search}%");
             })
             ->orderBy('product_code')
             ->paginate(10)
@@ -34,42 +36,49 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
+        $request->merge([
+            'is_active' => $request->has('is_active') ? true : false,
+        ]);
+
         $validated = $request->validate([
             'product_code' => ['required', 'string', 'max:50', 'unique:products,product_code'],
             'product_name' => ['required', 'string', 'max:200'],
-            'uom' => ['nullable', 'string', 'max:30'],
-            'uom_secondary' => ['nullable', 'string', 'max:30'],
+            'base_price' => ['required', 'numeric', 'min:0'],
+            'uom' => ['required', 'string', 'in:BOX,SACK'],
+            'net_weight' => ['nullable', 'string', 'max:50'],
             'segment' => ['nullable', 'string', 'max:150'],
             'is_active' => ['nullable', 'boolean'],
 
-            'prices.S1.price' => ['nullable', 'numeric', 'min:0'],
-            'prices.S1.discount_rate' => ['nullable', 'numeric', 'min:0'],
-            'prices.S2.price' => ['nullable', 'numeric', 'min:0'],
-            'prices.S2.discount_rate' => ['nullable', 'numeric', 'min:0'],
-            'prices.S3.price' => ['nullable', 'numeric', 'min:0'],
-            'prices.S3.discount_rate' => ['nullable', 'numeric', 'min:0'],
-            'prices.S4.price' => ['nullable', 'numeric', 'min:0'],
-            'prices.S4.discount_rate' => ['nullable', 'numeric', 'min:0'],
+            'discounts' => ['nullable', 'array'],
+            'discounts.*.min_qty' => ['nullable', 'numeric', 'min:0'],
+            'discounts.*.max_qty' => ['nullable', 'numeric', 'min:0'],
+            'discounts.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
 
-        DB::transaction(function () use ($request, $validated) {
+        $uom = strtoupper($validated['uom']);
+
+        DB::transaction(function () use ($request, $validated, $uom) {
             $product = Product::create([
                 'product_code' => $validated['product_code'],
                 'product_name' => $validated['product_name'],
-                'uom' => $validated['uom'] ?? null,
-                'uom_secondary' => $validated['uom_secondary'] ?? null,
+                'base_price' => $validated['base_price'],
+                'uom' => $uom,
+                'net_weight' => $validated['net_weight'] ?? null,
                 'segment' => $validated['segment'] ?? null,
-                'is_active' => $request->has('is_active'),
+                'is_active' => $request->boolean('is_active'),
             ]);
 
-            foreach (['S1', 'S2', 'S3', 'S4'] as $tier) {
-                ProductPrice::create([
+            $tiers = $uom === 'SACK'
+                ? ['S1', 'S2', 'S3']
+                : ['S1', 'S2', 'S3', 'S4', 'S5'];
+
+            foreach ($tiers as $tier) {
+                ProductDiscount::create([
                     'product_id' => $product->id,
-                    'tier_code' => $tier,
-                    'price' => $request->input("prices.{$tier}.price", 0) ?? 0,
-                    'discount_rate' => $request->input("prices.{$tier}.discount_rate", 0) ?? 0,
-                    'valid_from' => null,
-                    'valid_until' => null,
+                    'strata_level' => $tier,
+                    'min_qty' => $request->input("discounts.{$tier}.min_qty", 0) ?? 0,
+                    'max_qty' => $request->input("discounts.{$tier}.max_qty") ?: null,
+                    'discount_percentage' => $request->input("discounts.{$tier}.discount_percentage", 0) ?? 0,
                 ]);
             }
         });
@@ -81,22 +90,26 @@ class ProductController extends Controller
 
     public function show(Product $product)
     {
-        $product->load('prices');
+        $product->load('discounts');
 
         return view('products.show', compact('product'));
     }
 
     public function edit(Product $product)
     {
-        $product->load('prices');
+        $product->load('discounts');
 
-        $prices = $product->prices->keyBy('tier_code');
+        $discounts = $product->discounts->keyBy('strata_level');
 
-        return view('products.edit', compact('product', 'prices'));
+        return view('products.edit', compact('product', 'discounts'));
     }
 
     public function update(Request $request, Product $product)
     {
+        $request->merge([
+            'is_active' => $request->has('is_active') ? true : false,
+        ]);
+
         $validated = $request->validate([
             'product_code' => [
                 'required',
@@ -105,42 +118,48 @@ class ProductController extends Controller
                 Rule::unique('products', 'product_code')->ignore($product->id),
             ],
             'product_name' => ['required', 'string', 'max:200'],
-            'uom' => ['nullable', 'string', 'max:30'],
-            'uom_secondary' => ['nullable', 'string', 'max:30'],
+            'base_price' => ['required', 'numeric', 'min:0'],
+            'uom' => ['required', 'string', 'in:BOX,SACK'],
+            'net_weight' => ['nullable', 'string', 'max:50'],
             'segment' => ['nullable', 'string', 'max:150'],
             'is_active' => ['nullable', 'boolean'],
 
-            'prices.S1.price' => ['nullable', 'numeric', 'min:0'],
-            'prices.S1.discount_rate' => ['nullable', 'numeric', 'min:0'],
-            'prices.S2.price' => ['nullable', 'numeric', 'min:0'],
-            'prices.S2.discount_rate' => ['nullable', 'numeric', 'min:0'],
-            'prices.S3.price' => ['nullable', 'numeric', 'min:0'],
-            'prices.S3.discount_rate' => ['nullable', 'numeric', 'min:0'],
-            'prices.S4.price' => ['nullable', 'numeric', 'min:0'],
-            'prices.S4.discount_rate' => ['nullable', 'numeric', 'min:0'],
+            'discounts' => ['nullable', 'array'],
+            'discounts.*.min_qty' => ['nullable', 'numeric', 'min:0'],
+            'discounts.*.max_qty' => ['nullable', 'numeric', 'min:0'],
+            'discounts.*.discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
 
-        DB::transaction(function () use ($request, $validated, $product) {
+        $uom = strtoupper($validated['uom']);
+
+        DB::transaction(function () use ($request, $validated, $product, $uom) {
             $product->update([
                 'product_code' => $validated['product_code'],
                 'product_name' => $validated['product_name'],
-                'uom' => $validated['uom'] ?? null,
-                'uom_secondary' => $validated['uom_secondary'] ?? null,
+                'base_price' => $validated['base_price'],
+                'uom' => $uom,
+                'net_weight' => $validated['net_weight'] ?? null,
                 'segment' => $validated['segment'] ?? null,
-                'is_active' => $request->has('is_active'),
+                'is_active' => $request->boolean('is_active'),
             ]);
 
-            foreach (['S1', 'S2', 'S3', 'S4'] as $tier) {
-                ProductPrice::updateOrCreate(
+            $tiers = $uom === 'SACK'
+                ? ['S1', 'S2', 'S3']
+                : ['S1', 'S2', 'S3', 'S4', 'S5'];
+
+            // Remove discounts for tiers no longer allowed (e.g. S4 & S5 if changed to SACK)
+            $product->discounts()->whereNotIn('strata_level', $tiers)->delete();
+
+            foreach ($tiers as $tier) {
+                ProductDiscount::updateOrCreate(
                     [
                         'product_id' => $product->id,
-                        'tier_code' => $tier,
+                        'strata_level' => $tier,
                     ],
                     [
-                        'price' => $request->input("prices.{$tier}.price", 0) ?? 0,
-                        'discount_rate' => $request->input("prices.{$tier}.discount_rate", 0) ?? 0,
-                        'valid_from' => null,
-                        'valid_until' => null,
+                        'min_qty' => $request->input("discounts.{$tier}.min_qty", 0) ?? 0,
+                        'max_qty' => $request->input("discounts.{$tier}.max_qty") ?: null,
+                        'discount_percentage' => $request->input("discounts.{$tier}.discount_percentage", 0) ?? 0,
                     ]
                 );
             }

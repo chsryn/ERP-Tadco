@@ -12,6 +12,14 @@ use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SearchController;
+
+Route::get('/', function () {
+    if (auth()->check()) {
+        return redirect()->route('dashboard.index');
+    }
+    return redirect()->route('login');
+});
 
 // Authentication routes
 Route::middleware('guest')->group(function () {
@@ -22,21 +30,10 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
-    Route::get('/', function () {
-        return redirect()->route('dashboard.index');
-    });
+    // Global search route
+    Route::get('/search/global', [SearchController::class, 'global'])->name('search.global');
 
-// User management routes
-    // Route::get('/users', [UserController::class, 'index'])->name('users.index');
-    // Route::get('/users/create', [UserController::class, 'create'])->name('users.create');
-    // Route::post('/users', [UserController::class, 'store'])->name('users.store');
-    // Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
-    // Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
-    // Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
-
-    // Alternatively, you can use resource route for users
-    // Route::resource('users', UserController::class);
-Route::resource('users', UserController::class);
+    Route::resource('users', UserController::class);
 
     // Dashboard route
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
@@ -45,6 +42,7 @@ Route::resource('users', UserController::class);
 
     // Resource routes
     Route::resource('customers', CustomerController::class);
+    Route::post('/customers/ajax', [App\Http\Controllers\CustomerController::class, 'storeAjax'])->name('customers.store_ajax');
     Route::resource('products', ProductController::class);
 
     // Import routes
@@ -78,25 +76,12 @@ Route::resource('users', UserController::class);
     Route::delete('/delivery-orders/{deliveryOrder}', [DeliveryOrderController::class, 'destroy'])
         ->name('delivery_orders.destroy');
 
-    // Shipment routes
-    // Route::get('/shipments', [ShipmentController::class, 'index'])
-    //     ->name('shipments.index');
-    // Route::get('/shipments/create', [ShipmentController::class, 'create'])
-    //     ->name('shipments.create');
-    // Route::post('/shipments', [ShipmentController::class, 'store'])
-    //     ->name('shipments.store');
-    // Route::get('/shipments/{shipment}', [ShipmentController::class, 'show'])
-    //     ->name('shipments.show');
-    // Route::get('/shipments/{shipment}/edit', [ShipmentController::class, 'edit'])
-    //     ->name('shipments.edit');
-    // Route::put('/shipments/{shipment}', [ShipmentController::class, 'update'])
-    //     ->name('shipments.update');
-    // Route::delete('/shipments/{shipment}', [ShipmentController::class, 'destroy'])
-    //     ->name('shipments.destroy');
-
+    Route::post('/shipments/{shipment}/mark-received', [\App\Http\Controllers\ShipmentController::class, 'markReceived'])->name('shipments.mark_received');
     Route::resource('shipments', ShipmentController::class);
 
     // Invoice routes
+    Route::get('/invoices/{invoice}/export-excel', [InvoiceController::class, 'exportExcel'])->name('invoices.export_excel');
+    Route::post('/invoices/{invoice}/quick-pay', [App\Http\Controllers\InvoiceController::class, 'quickPay'])->name('invoices.quick_pay');
     Route::resource('invoices', InvoiceController::class);
     // Payment routes
     Route::resource('payments', PaymentController::class);

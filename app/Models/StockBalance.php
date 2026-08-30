@@ -14,8 +14,8 @@ class StockBalance extends Model
     ];
 
     protected $casts = [
-        'qty_available' => 'decimal:2',
-        'qty_reserved' => 'decimal:2',
+        'qty_available' => 'decimal:4',
+        'qty_reserved' => 'decimal:4',
     ];
 
     public function warehouse()

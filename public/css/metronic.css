@@ -1,0 +1,96 @@
+:root {
+    --bs-primary: #1B84FF;
+    --bs-primary-rgb: 27, 132, 255;
+    --bs-success: #17C653;
+    --bs-warning: #F6C000;
+    --bs-body-bg: #F9F9F9;
+    --bs-body-color: #071437;
+    --bs-secondary-color: #4B5675;
+    --bs-border-color: #F1F1F4;
+    --bs-body-font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --bs-body-font-size: 14.95px;
+    --bs-body-font-weight: 500;
+}
+
+body {
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    font-family: var(--bs-body-font-family);
+    line-height: 1.5;
+}
+
+h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
+    font-weight: 600;
+    color: #071437;
+}
+
+/* Override Cards */
+.card {
+    background-color: #FFFFFF;
+    border: 1px solid #F1F1F4;
+    border-radius: 8.125px;
+    box-shadow: rgba(0, 0, 0, 0.03) 0px 3px 4px 0px;
+}
+.card-header {
+    background-color: transparent;
+    border-bottom: none;
+    padding: 20px 24px 0px 24px;
+}
+.card-body {
+    padding: 20px 24px;
+}
+.card-footer {
+    background-color: transparent;
+    border-top: 1px solid #F1F1F4;
+}
+
+/* Override Buttons */
+.btn {
+    border-radius: 6.175px;
+    font-weight: 600;
+    padding: 8.15px 14px;
+    box-shadow: none !important;
+}
+.btn-primary {
+    background-color: #1B84FF;
+    border-color: #1B84FF;
+    color: #FFFFFF;
+}
+.btn-primary:hover, .btn-primary:active {
+    background-color: #1570E8 !important;
+    border-color: #1570E8 !important;
+}
+.btn-success {
+    background-color: #17C653;
+    border-color: #17C653;
+    color: #FFFFFF;
+}
+.btn-success:hover, .btn-success:active {
+    background-color: #15B04A !important;
+    border-color: #15B04A !important;
+}
+
+/* Override Forms & Inputs */
+.form-control, .form-select {
+    background-color: #FFFFFF;
+    border: 1px solid #F1F1F4;
+    border-radius: 6.175px;
+    color: #4B5675;
+    font-weight: 500;
+    padding: 10.075px 13px;
+    font-size: 14.3px;
+}
+.form-control:focus, .form-select:focus {
+    border-color: #1B84FF;
+    box-shadow: 0 0 0 3px rgba(27, 132, 255, 0.1);
+}
+.form-control::placeholder {
+    color: #99A1B7;
+}
+
+/* Override Badges */
+.badge {
+    border-radius: 5.525px;
+    padding: 4px 8px;
+    font-weight: 600;
+}

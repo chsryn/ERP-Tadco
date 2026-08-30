@@ -29,7 +29,6 @@ class ReceivablesReportExport implements FromCollection, WithHeadings, WithMappi
             ->where('receivable_amount', '>', 0)
             ->where(function ($q) {
                 $q->where('status', '=', 'unpaid')
-                    ->orWhere('status', '=', 'partial_paid')
                     ->orWhere('status', '=', 'overdue');
             });
 

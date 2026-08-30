@@ -3,55 +3,43 @@
 namespace App\Imports;
 
 use App\Models\Customer;
-use Maatwebsite\Excel\Concerns\ToModel;
-use Maatwebsite\Excel\Concerns\WithHeadingRow;
-use Maatwebsite\Excel\Concerns\WithValidation;
+use Illuminate\Support\Collection;
+use Maatwebsite\Excel\Concerns\ToCollection;
+use Maatwebsite\Excel\Concerns\WithStartRow;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 
-class CustomersImport implements ToModel, WithHeadingRow, WithValidation, SkipsEmptyRows
+class CustomersImport implements ToCollection, WithStartRow, SkipsEmptyRows
 {
-    public function headingRow(): int
+    public function startRow(): int
     {
         return 2;
     }
 
-    public function model(array $row)
+    public function collection(Collection $rows)
     {
-        $customerCode = trim($row['item_code'] ?? '');
-        $customerName = trim($row['nama_customer'] ?? '');
+        foreach ($rows as $row) {
+            $customerName = trim($row[1] ?? '');
+            $customerCode = trim($row[2] ?? '');
 
-        if ($customerCode === '' || $customerName === '') {
-            return null;
+            // Skip jika data kode customer kosong, nama kosong, atau membaca baris header
+            if ($customerCode === '' || $customerName === '' || $customerName === 'NAMA CUSTOMER') {
+                continue;
+            }
+
+            Customer::updateOrCreate(
+                [
+                    'customer_code' => $customerCode,
+                ],
+                [
+                    'customer_name'    => $customerName,
+                    'province'         => trim($row[3] ?? ''),
+                    'city'             => trim($row[4] ?? ''),
+                    'district'         => trim($row[5] ?? ''),
+                    'sub_district'     => trim($row[6] ?? ''),
+                    'address'          => trim($row[7] ?? ''),
+                    'is_active'        => true,
+                ]
+            );
         }
-
-        if (strtoupper($customerCode) === '#N/A') {
-            return null;
-        }
-
-        return Customer::updateOrCreate(
-            [
-                'customer_code' => $customerCode,
-            ],
-            [
-                'customer_name'    => $customerName,
-                'province'         => trim($row['province'] ?? ''),
-                'city'             => trim($row['city'] ?? ''),
-                'district'         => trim($row['district'] ?? ''),
-                'sub_district'     => trim($row['sub_district'] ?? ''),
-                'address'          => trim($row['adress'] ?? ''),
-                'type_of_business' => trim($row['type_of_bussiness'] ?? ''),
-                'market'           => trim($row['market'] ?? ''),
-                'customer_type'    => trim($row['type_of_customer'] ?? ''),
-                'is_active'        => true,
-            ]
-        );
-    }
-
-    public function rules(): array
-    {
-        return [
-            '*.item_code' => ['required'],
-            '*.nama_customer' => ['required'],
-        ];
     }
 }

@@ -20,7 +20,7 @@ class StockMovement extends Model
 
     protected $casts = [
         'movement_date' => 'datetime',
-        'qty' => 'decimal:2',
+        'qty' => 'decimal:4',
     ];
 
     public function warehouse()

@@ -1,111 +1,84 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <title>Detail Stok - ERP TADCO</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+@extends('layouts.app')
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
+@section('title', 'Detail Stok - ERP TADCO')
+@section('page_title', 'Detail Mutasi & Saldo Stok')
+@section('page_subtitle', 'Informasi ketersediaan stok produk dan riwayat mutasi pergerakan fisik')
 
-<body class="bg-light">
-<div class="container py-5">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h3 class="mb-0">Detail Stok Produk</h3>
-            <small class="text-muted">
-                {{ $stockBalance->product->product_code ?? '-' }} -
-                {{ $stockBalance->product->product_name ?? '-' }}
-            </small>
+@section('content')
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h4 class="fw-bold mb-1"><i class="bi bi-box-seam me-2 text-primary"></i>Stok: {{ $stockBalance->product->product_name ?? '-' }}</h4>
+                <p class="text-muted small mb-0">Kode Produk: <span class="badge bg-secondary">{{ $stockBalance->product->product_code ?? '-' }}</span></p>
+            </div>
+            <a href="{{ route('inventory.index') }}" class="btn btn-outline-secondary btn-sm px-3 rounded-pill">
+                <i class="bi bi-arrow-left me-1"></i> Kembali
+            </a>
         </div>
 
-        <a href="{{ route('inventory.index') }}" class="btn btn-secondary">
-            Kembali
-        </a>
-    </div>
-
-    <div class="card mb-4">
-        <div class="card-header">
-            Informasi Stok
+        <div class="row g-4 mb-4">
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm rounded-4 p-3 bg-light">
+                    <small class="text-secondary fw-semibold">Stok Fisik Tersedia</small>
+                    <h4 class="fw-bold text-dark mb-0 mt-1">{{ number_format($stockBalance->qty_available, 0, ',', '.') }}</h4>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm rounded-4 p-3 bg-warning-subtle border-start border-warning border-4">
+                    <small class="text-warning-emphasis fw-semibold">Stok Reserved (DO)</small>
+                    <h4 class="fw-bold text-warning mb-0 mt-1">{{ number_format($stockBalance->qty_reserved, 0, ',', '.') }}</h4>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm rounded-4 p-3 bg-success-subtle border-start border-success border-4">
+                    <small class="text-success-emphasis fw-semibold">Stok Bisa Dipakai (Nett)</small>
+                    <h4 class="fw-bold text-success mb-0 mt-1">{{ number_format($stockBalance->qty_available - $stockBalance->qty_reserved, 0, ',', '.') }}</h4>
+                </div>
+            </div>
         </div>
 
-        <div class="card-body">
-            <table class="table table-bordered">
-                <tr>
-                    <th style="width: 250px;">Gudang</th>
-                    <td>{{ $stockBalance->warehouse->warehouse_name ?? '-' }}</td>
-                </tr>
-                <tr>
-                    <th>Kode Produk</th>
-                    <td>{{ $stockBalance->product->product_code ?? '-' }}</td>
-                </tr>
-                <tr>
-                    <th>Nama Produk</th>
-                    <td>{{ $stockBalance->product->product_name ?? '-' }}</td>
-                </tr>
-                <tr>
-                    <th>Stok Tersedia</th>
-                    <td>{{ number_format($stockBalance->qty_available, 2, ',', '.') }}</td>
-                </tr>
-                <tr>
-                    <th>Stok Reserved</th>
-                    <td>{{ number_format($stockBalance->qty_reserved, 2, ',', '.') }}</td>
-                </tr>
-                <tr>
-                    <th>Stok Bisa Dipakai</th>
-                    <td>{{ number_format($stockBalance->qty_available - $stockBalance->qty_reserved, 2, ',', '.') }}</td>
-                </tr>
-            </table>
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="card-header">
-            Riwayat Pergerakan Stok
-        </div>
-
-        <div class="card-body table-responsive">
-            <table class="table table-bordered table-hover align-middle">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Tanggal</th>
-                        <th>Jenis</th>
-                        <th class="text-end">Qty</th>
-                        <th>Sumber</th>
-                        <th>Catatan</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    @forelse($movements as $movement)
-                        <tr>
-                            <td>{{ $movement->movement_date->format('d/m/Y H:i') }}</td>
-                            <td>
-                                @if(in_array($movement->movement_type, ['in', 'return', 'adjustment_in']))
-                                    <span class="badge bg-success">{{ $movement->movement_type }}</span>
-                                @else
-                                    <span class="badge bg-danger">{{ $movement->movement_type }}</span>
-                                @endif
-                            </td>
-                            <td class="text-end">{{ number_format($movement->qty, 2, ',', '.') }}</td>
-                            <td>{{ $movement->source_type ?? '-' }}</td>
-                            <td>{{ $movement->notes ?? '-' }}</td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="5" class="text-center text-muted">
-                                Belum ada riwayat pergerakan stok.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-
-            <div class="mt-3">
-                {{ $movements->links() }}
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-header bg-white py-3 px-4 border-0 rounded-top-4 d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-clock-history me-2 text-primary"></i>Riwayat Mutasi Stok Produk</h6>
+            </div>
+            <div class="card-body px-4 pb-4">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Tanggal</th>
+                                <th>Jenis Mutasi</th>
+                                <th class="text-end">Jumlah (Qty)</th>
+                                <th>Sumber / Keterangan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($movements as $movement)
+                                <tr>
+                                    <td class="fw-medium text-dark">{{ $movement->movement_date->format('d/m/Y H:i') }}</td>
+                                    <td>
+                                        @if($movement->movement_type === 'in')
+                                            <span class="badge bg-success-subtle text-success px-3 py-1 rounded-pill"><i class="bi bi-arrow-down-left me-1"></i> Masuk</span>
+                                        @elseif($movement->movement_type === 'out')
+                                            <span class="badge bg-danger-subtle text-danger px-3 py-1 rounded-pill"><i class="bi bi-arrow-up-right me-1"></i> Keluar</span>
+                                        @else
+                                            <span class="badge bg-info-subtle text-info px-3 py-1 rounded-pill"><i class="bi bi-sliders me-1"></i> Adjustment</span>
+                                        @endif
+                                    </td>
+                                    <td class="text-end fw-bold text-dark">{{ number_format($movement->qty, 0, ',', '.') }}</td>
+                                    <td class="small text-muted">{{ $movement->notes ?? '-' }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-4">Belum ada riwayat mutasi stok.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 </div>
-</body>
-</html>
+@endsection

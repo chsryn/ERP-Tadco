@@ -17,15 +17,11 @@ return new class extends Migration
             $table->string('district', 100)->nullable();
             $table->string('sub_district', 100)->nullable();
             $table->text('address')->nullable();
-            $table->string('type_of_business', 100)->nullable();
-            $table->string('market', 100)->nullable();
-            $table->string('customer_type', 100)->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
             $table->index('customer_name');
             $table->index('city');
-            $table->index('customer_type');
         });
     }
 

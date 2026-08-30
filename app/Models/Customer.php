@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Customer extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'customer_code',
         'customer_name',
@@ -14,9 +17,6 @@ class Customer extends Model
         'district',
         'sub_district',
         'address',
-        'type_of_business',
-        'market',
-        'customer_type',
         'is_active',
     ];
 }
