@@ -21,7 +21,7 @@ class DeliveryOrderController extends Controller
         $search = $request->get('search');
 
         $deliveryOrders = DeliveryOrder::query()
-            ->with(['customer', 'warehouse'])
+            ->with(['customer'])
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('do_number', 'like', "%{$search}%")
@@ -45,26 +45,11 @@ class DeliveryOrderController extends Controller
             ->orderBy('customer_name')
             ->get();
 
-        $defaultWarehouse = \App\Models\Warehouse::query()->first();
-
         $products = Product::query()
-            ->with(['discounts', 'stockBalances' => function ($q) use ($defaultWarehouse) {
-                if ($defaultWarehouse) {
-                    $q->where('warehouse_id', '=', $defaultWarehouse->id);
-                }
-            }])
+            ->with(['discounts', 'stockBalances'])
             ->where('is_active', '=', true)
-            ->when($defaultWarehouse, function ($query) use ($defaultWarehouse) {
-                $hasStockInWarehouse = \App\Models\StockBalance::query()
-                    ->where('warehouse_id', '=', $defaultWarehouse->id)
-                    ->exists();
-
-                if ($hasStockInWarehouse) {
-                    $query->whereHas('stockBalances', function ($q) use ($defaultWarehouse) {
-                        $q->where('warehouse_id', '=', $defaultWarehouse->id)
-                          ->whereRaw('(qty_available - qty_reserved) > 0');
-                    });
-                }
+            ->whereHas('stockBalances', function ($q) {
+                $q->whereRaw('(qty_available - qty_reserved) > 0');
             })
             ->orderBy('product_name')
             ->get();
@@ -95,7 +80,6 @@ class DeliveryOrderController extends Controller
     {
         $deliveryOrder->load([
             'customer',
-            'warehouse',
             'items.product',
         ]);
 

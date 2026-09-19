@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 class StockMovement extends Model
 {
     protected $fillable = [
-        'warehouse_id',
         'product_id',
         'movement_date',
         'movement_type',
@@ -22,11 +21,6 @@ class StockMovement extends Model
         'movement_date' => 'datetime',
         'qty' => 'decimal:4',
     ];
-
-    public function warehouse()
-    {
-        return $this->belongsTo(Warehouse::class);
-    }
 
     public function product()
     {

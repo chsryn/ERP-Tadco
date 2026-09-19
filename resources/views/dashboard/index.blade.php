@@ -110,7 +110,7 @@
     <div class="row g-4 mb-4 align-items-stretch">
         <div class="col-12 col-xl-5">
             <div class="card chart-card h-100">
-                <h5 class="section-title mb-4">Kapasitas Gudang</h5>
+                <h5 class="section-title mb-4">Kapasitas Stok</h5>
 
                 <div class="donut" style="--percent: {{ $usedPercent }};">
                     <div class="donut-inner">

@@ -41,6 +41,7 @@
             min-height: 100vh;
             padding-left: 280px;
             background: var(--app-navy);
+            transition: padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .sidebar {
@@ -55,6 +56,95 @@
             flex-direction: column;
             padding: 24px 16px 20px;
             box-shadow: 0 0 50px rgba(15, 23, 42, 0.18);
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow-x: hidden;
+        }
+
+        /* Ponytail: collapsed = icon-only 72px, no extra JS libs */
+        .app-shell.collapsed {
+            padding-left: 72px;
+        }
+
+        .sidebar.collapsed {
+            width: 72px;
+            padding-left: 8px;
+            padding-right: 8px;
+        }
+
+        .sidebar.collapsed .brand-logo {
+            max-height: 36px;
+        }
+
+        .sidebar.collapsed .sidebar-link,
+        .sidebar.collapsed .sidebar-group-toggle {
+            justify-content: center;
+            padding-left: 8px;
+            padding-right: 8px;
+            gap: 0;
+        }
+
+        .sidebar.collapsed .sidebar-link span,
+        .sidebar.collapsed .sidebar-group-toggle > span > span,
+        .sidebar.collapsed .sidebar-group-toggle .bi-chevron-down,
+        .sidebar.collapsed .sidebar-footer .overflow-hidden,
+        .sidebar.collapsed .sidebar-footer small {
+            display: none !important;
+        }
+
+        .sidebar.collapsed .sidebar-submenu {
+            display: none !important;
+        }
+
+        .sidebar.collapsed .sidebar-footer {
+            padding: 10px 6px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .sidebar-toggle {
+            width: 40px;
+            height: 40px;
+            border: 1px solid rgba(219, 223, 233, 0.7);
+            border-radius: 999px;
+            background: #fff;
+            color: var(--app-text);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+            opacity: 0.55;
+            transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+        }
+
+        .sidebar-toggle:hover {
+            background: #f8fafc;
+            border-color: var(--app-blue);
+            color: var(--app-blue);
+            opacity: 1;
+        }
+
+        .sidebar-toggle i {
+            transition: transform 0.3s ease;
+        }
+
+        .app-shell.collapsed .sidebar-toggle i {
+            transform: scaleX(-1);
+        }
+
+        .sidebar-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(7, 20, 55, 0.45);
+            backdrop-filter: blur(2px);
+            z-index: 19;
+        }
+
+        .sidebar-backdrop.show {
+            display: block;
         }
 
         /* .sidebar .brand {
@@ -900,14 +990,29 @@
 
         @media (max-width: 992px) {
             .app-shell {
-                padding-left: 0;
+                padding-left: 0 !important;
+            }
+
+            .app-shell.collapsed {
+                padding-left: 0 !important;
             }
 
             .sidebar {
-                position: static;
-                width: 100%;
-                min-height: auto;
-                padding-bottom: 16px;
+                position: fixed;
+                inset: 0 auto 0 0;
+                width: 280px;
+                min-height: 100vh;
+                transform: translateX(0);
+                padding-bottom: 20px;
+            }
+
+            .sidebar.collapsed {
+                transform: translateX(-100%);
+                width: 280px;
+            }
+
+            .app-shell:not(.collapsed) .sidebar-backdrop {
+                display: block;
             }
 
             .sidebar .brand {
@@ -961,8 +1066,9 @@
 </head>
 
 <body>
-    <div class="app-shell">
-        <aside class="sidebar">
+    <div class="app-shell" id="appShell">
+        <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
+        <aside class="sidebar" id="appSidebar" aria-label="Sidebar navigasi">
             <div class="brand">
                 <img src="{{ asset('images/Tadco-TP2.png') }}" alt="TADCO ERP" class="brand-logo">
                 <!-- <span style="color:#94a3b8; font-size:13px; font-weight:500; white-space:nowrap;">Admin Dashboard</span> -->
@@ -1107,7 +1213,13 @@
 
         <main class="main-content">
             <div class="topbar">
-                <div class="search-pill" id="globalSearchPill">
+                <div class="d-flex align-items-center gap-3 flex-grow-1" style="min-width:0;">
+                    <button type="button" class="sidebar-toggle" id="sidebarToggle"
+                        aria-label="Tutup sidebar" aria-expanded="true" aria-controls="appSidebar"
+                        title="Toggle sidebar (Ctrl+B)">
+                        <i class="bi bi-layout-sidebar-inset" aria-hidden="true"></i>
+                    </button>
+                    <div class="search-pill flex-grow-1" id="globalSearchPill" style="max-width: 420px;">
                     <i class="bi bi-search text-muted" id="globalSearchIcon"></i>
                     <div class="spinner-border spinner-border-sm text-primary d-none" id="globalSearchSpinner" role="status" style="width: 14px; height: 14px;">
                         <span class="visually-hidden">Loading...</span>
@@ -1118,6 +1230,7 @@
                     </button>
 
                     <div class="search-dropdown" id="globalSearchDropdown"></div>
+                    </div>
                 </div>
 
                 <div class="topbar-actions">
@@ -1207,8 +1320,81 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Sidebar toggle: expand/collapse — ponytail: boolean + localStorage, no lib
+        (() => {
+            const shell = document.getElementById('appShell');
+            const sidebar = document.getElementById('appSidebar');
+            const btn = document.getElementById('sidebarToggle');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            if (!shell || !sidebar || !btn) return;
+
+            const mq = window.matchMedia('(max-width: 992px)');
+            const isMobile = () => mq.matches;
+
+            const apply = (collapsed, persist = true) => {
+                shell.classList.toggle('collapsed', collapsed);
+                sidebar.classList.toggle('collapsed', collapsed);
+                btn.setAttribute('aria-expanded', String(!collapsed));
+                btn.setAttribute('aria-label', collapsed ? 'Buka sidebar' : 'Tutup sidebar');
+                btn.title = collapsed ? 'Buka sidebar (Ctrl+B)' : 'Tutup sidebar (Ctrl+B)';
+                if (backdrop) backdrop.classList.toggle('show', !collapsed && isMobile());
+                if (persist) try { localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0'); } catch(e) {}
+                // Tooltip ringan saat collapsed desktop: tampilkan title pada link
+                document.querySelectorAll('.sidebar-link, .sidebar-group-toggle').forEach(el => {
+                    if (collapsed && !isMobile()) {
+                        const txt = el.querySelector('span span') || el.querySelector('span');
+                        if (txt && !el.getAttribute('title')) el.setAttribute('title', txt.textContent.trim());
+                    } else if (!collapsed) {
+                        // keep original title if any
+                    }
+                });
+            };
+
+            let initial = false;
+            try { initial = localStorage.getItem('sidebarCollapsed') === '1'; } catch(e) {}
+            // Mobile default: hidden (collapsed=true means drawer closed)
+            if (isMobile()) initial = true;
+            apply(initial, false);
+
+            const toggleSidebar = () => {
+                const nowCollapsed = shell.classList.contains('collapsed');
+                // Auto-expand saat klik submenu dalam keadaan collapsed desktop
+                apply(!nowCollapsed);
+            };
+
+            btn.addEventListener('click', toggleSidebar);
+            if (backdrop) backdrop.addEventListener('click', () => apply(true));
+
+            // Ctrl+B shortcut + Escape untuk tutup di mobile
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+                    e.preventDefault();
+                    toggleSidebar();
+                }
+                if (e.key === 'Escape' && isMobile() && !shell.classList.contains('collapsed')) {
+                    apply(true);
+                }
+            });
+
+            // Saat resize crossing breakpoint, sesuaikan
+            mq.addEventListener('change', () => {
+                if (isMobile()) apply(true, false);
+            });
+
+            // Expose for debugging
+            window.toggleSidebar = toggleSidebar;
+        })();
+
         document.querySelectorAll('.sidebar-group-toggle').forEach(toggle => {
             toggle.addEventListener('click', () => {
+                // Jika sidebar collapsed di desktop, expand dulu
+                const shell = document.getElementById('appShell');
+                if (shell && shell.classList.contains('collapsed') && !window.matchMedia('(max-width: 992px)').matches) {
+                    shell.classList.remove('collapsed');
+                    document.getElementById('appSidebar')?.classList.remove('collapsed');
+                    document.getElementById('sidebarToggle')?.setAttribute('aria-expanded', 'true');
+                    try { localStorage.setItem('sidebarCollapsed', '0'); } catch(e) {}
+                }
                 // 1. Tutup semua submenu yang sedang terbuka (kecuali yang sedang di-klik)
                 document.querySelectorAll('.sidebar-group-toggle').forEach(otherToggle => {
                     if (otherToggle !== toggle) {

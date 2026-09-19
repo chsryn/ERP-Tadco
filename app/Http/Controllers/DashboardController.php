@@ -52,7 +52,7 @@ class DashboardController extends Controller
             ->count('*');
 
         $lowStocks = StockBalance::query()
-            ->with(['product', 'warehouse'])
+            ->with(['product'])
             ->where('qty_available', '<=', 10)
             ->orderBy('qty_available')
             ->limit(10)

@@ -11,7 +11,6 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\StockBalance;
 use App\Models\StockMovement;
-use App\Models\Warehouse;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -21,12 +20,7 @@ class DummyDataSeeder extends Seeder
     public function run(): void
     {
         DB::transaction(function () {
-            // 1. Setup Gudang & Customer
-            $warehouse = Warehouse::firstOrCreate(
-                ['warehouse_code' => 'WH-01'],
-                ['warehouse_name' => 'Gudang Utama', 'is_active' => true]
-            );
-
+            // 1. Setup Customer
             $customer1 = Customer::firstOrCreate(
                 ['customer_code' => 'CUST-01'],
                 ['customer_name' => 'Toko Makmur Jaya', 'is_active' => true]
@@ -51,12 +45,11 @@ class DummyDataSeeder extends Seeder
             foreach ([$product1, $product2] as $prod) {
                 if ($prod) {
                     StockBalance::updateOrCreate(
-                        ['warehouse_id' => $warehouse->id, 'product_id' => $prod->id],
+                        ['product_id' => $prod->id],
                         ['qty_available' => 500, 'qty_reserved' => 0]
                     );
 
                     StockMovement::create([
-                        'warehouse_id'  => $warehouse->id,
                         'product_id'    => $prod->id,
                         'movement_date' => Carbon::now()->subDays(7),
                         'movement_type' => 'in',
@@ -69,7 +62,6 @@ class DummyDataSeeder extends Seeder
             // Skenario 1 (Lunas/Paid): Customer 1 beli 'TG-G-10B' (BOX), Qty 15, TOP 0 (Cash), 3 hari yang lalu
             if ($product1) {
                 $this->createScenarioTransaction(
-                    warehouse: $warehouse,
                     customer: $customer1,
                     product: $product1,
                     qty: 15,
@@ -82,7 +74,6 @@ class DummyDataSeeder extends Seeder
             // Skenario 2 (Tempo/Unpaid): Customer 2 beli 'TG-GM-25' (SACK), Qty 20, TOP 14 (Tempo), Hari ini
             if ($product2) {
                 $this->createScenarioTransaction(
-                    warehouse: $warehouse,
                     customer: $customer2,
                     product: $product2,
                     qty: 20,
@@ -94,7 +85,7 @@ class DummyDataSeeder extends Seeder
         });
     }
 
-    private function createScenarioTransaction($warehouse, $customer, $product, int $qty, int $paymentTermDays, bool $isPaid, Carbon $createdDate): void
+    private function createScenarioTransaction($customer, $product, int $qty, int $paymentTermDays, bool $isPaid, Carbon $createdDate): void
     {
         // Hitung diskon & final price otomatis berdasarkan relasi diskon produk
         $product->loadMissing('discounts');
@@ -118,7 +109,6 @@ class DummyDataSeeder extends Seeder
         $do = DeliveryOrder::create([
             'do_number'             => $doNumber,
             'customer_id'           => $customer->id,
-            'warehouse_id'          => $warehouse->id,
             'do_date'               => $createdDate->format('Y-m-d'),
             'planned_delivery_date' => $createdDate->format('Y-m-d'),
             'status'                => 'shipped',
@@ -136,8 +126,7 @@ class DummyDataSeeder extends Seeder
         ]);
 
         // Potong Stok & Buat Movement Out
-        $stockBalance = StockBalance::where('warehouse_id', $warehouse->id)
-            ->where('product_id', $product->id)
+        $stockBalance = StockBalance::where('product_id', $product->id)
             ->first();
 
         if ($stockBalance) {
@@ -145,7 +134,6 @@ class DummyDataSeeder extends Seeder
         }
 
         StockMovement::create([
-            'warehouse_id'  => $warehouse->id,
             'product_id'    => $product->id,
             'movement_date' => $createdDate->format('Y-m-d H:i:s'),
             'movement_type' => 'out',

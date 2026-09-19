@@ -45,7 +45,7 @@ class InvoiceController extends Controller
     public function create()
     {
         $deliveryOrders = DeliveryOrder::query()
-            ->with(['customer', 'warehouse', 'items.product'])
+            ->with(['customer', 'items.product'])
             ->where('status', '=', 'shipped')
             ->doesntHave('invoice')
             ->orderByDesc('do_date')
@@ -76,7 +76,7 @@ class InvoiceController extends Controller
     {
         $invoice->load([
             'customer',
-            'deliveryOrder.warehouse',
+            'deliveryOrder',
             'items.product',
         ]);
 

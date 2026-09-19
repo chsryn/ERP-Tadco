@@ -38,18 +38,7 @@
                 </div>
                 <div class="card-body px-4 pb-4">
                     <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold small text-secondary">Gudang Target <span class="text-danger">*</span></label>
-                            <select name="warehouse_id" class="form-select bg-light" required>
-                                @foreach ($warehouses as $wh)
-                                    <option value="{{ $wh->id }}" {{ old('warehouse_id') == $wh->id ? 'selected' : '' }}>
-                                        {{ $wh->warehouse_code }} - {{ $wh->warehouse_name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <div class="col-md-6">
+                        <div class="col-md-12">
                             <label class="form-label fw-semibold small text-secondary">Pilih Produk <span class="text-danger">*</span></label>
                             <select name="product_id" class="form-select bg-light" required>
                                 <option value="">-- Pilih Produk --</option>

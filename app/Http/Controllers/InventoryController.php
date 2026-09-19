@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\StockBalance;
 use App\Models\StockMovement;
-use App\Models\Warehouse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -15,7 +14,7 @@ class InventoryController extends Controller
     {
         $search = $request->get('search');
 
-        $stocks = StockBalance::with(['product', 'warehouse'])
+        $stocks = StockBalance::with(['product'])
             ->when($search, function ($query, $search) {
                 $query->whereHas('product', function ($q) use ($search) {
                     $q->where('product_code', 'like', "%{$search}%")
@@ -33,10 +32,9 @@ class InventoryController extends Controller
 
     public function show(StockBalance $stockBalance)
     {
-        $stockBalance->load(['product', 'warehouse']);
+        $stockBalance->load(['product']);
 
-        $movements = StockMovement::with(['product', 'warehouse'])
-            ->where('warehouse_id', $stockBalance->warehouse_id)
+        $movements = StockMovement::with(['product'])
             ->where('product_id', $stockBalance->product_id)
             ->latest('movement_date')
             ->paginate(10);
@@ -51,25 +49,12 @@ class InventoryController extends Controller
             ->orderBy('product_name')
             ->get();
 
-        $warehouses = Warehouse::query()
-            ->where('is_active', true)
-            ->orderBy('warehouse_name')
-            ->get();
-
-        return view('inventory.adjustment', compact('products', 'warehouses'));
+        return view('inventory.adjustment', compact('products'));
     }
 
     public function storeAdjustment(Request $request)
     {
-        if (!$request->filled('warehouse_id')) {
-            $defaultWarehouse = Warehouse::query()->first();
-            if ($defaultWarehouse) {
-                $request->merge(['warehouse_id' => $defaultWarehouse->id]);
-            }
-        }
-
         $validated = $request->validate([
-            'warehouse_id' => ['required', 'exists:warehouses,id'],
             'product_id' => ['required', 'exists:products,id'],
             'movement_type' => ['required', 'in:in,out,return,damage,adjustment,adjustment_in,adjustment_out'],
             'qty' => ['required', 'numeric', 'min:0.01'],
@@ -80,7 +65,6 @@ class InventoryController extends Controller
         DB::transaction(function () use ($validated) {
             $stockBalance = StockBalance::firstOrCreate(
                 [
-                    'warehouse_id' => $validated['warehouse_id'],
                     'product_id' => $validated['product_id'],
                 ],
                 [
@@ -112,7 +96,6 @@ class InventoryController extends Controller
             $stockBalance->save();
 
             StockMovement::create([
-                'warehouse_id' => $validated['warehouse_id'],
                 'product_id' => $validated['product_id'],
                 'movement_date' => $validated['movement_date'],
                 'movement_type' => $movementType,

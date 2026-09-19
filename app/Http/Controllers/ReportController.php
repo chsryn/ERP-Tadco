@@ -54,7 +54,7 @@ class ReportController extends Controller
         $lowStockOnly = $request->get('low_stock_only');
 
         $query = StockBalance::query()
-            ->with(['product', 'warehouse']);
+            ->with(['product']);
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -62,9 +62,6 @@ class ReportController extends Controller
                     $productQuery->where('product_code', 'like', "%{$search}%")
                         ->orWhere('product_name', 'like', "%{$search}%")
                         ->orWhere('segment', 'like', "%{$search}%");
-                })->orWhereHas('warehouse', function ($warehouseQuery) use ($search) {
-                    $warehouseQuery->where('warehouse_name', 'like', "%{$search}%")
-                        ->orWhere('warehouse_code', 'like', "%{$search}%");
                 });
             });
         }

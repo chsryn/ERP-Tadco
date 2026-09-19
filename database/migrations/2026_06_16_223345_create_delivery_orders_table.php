@@ -16,10 +16,6 @@ return new class extends Migration
                 ->constrained('customers')
                 ->restrictOnDelete();
 
-            $table->foreignId('warehouse_id')
-                ->constrained('warehouses')
-                ->restrictOnDelete();
-
             $table->foreignId('sales_id')
                 ->nullable()
                 ->constrained('users')

@@ -10,7 +10,6 @@ return new class extends Migration
     {
         Schema::create('stock_movements', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('warehouse_id')->constrained('warehouses')->restrictOnDelete();
             $table->foreignId('product_id')->constrained('products')->restrictOnDelete();
             $table->dateTime('movement_date');
             $table->string('movement_type', 30);
@@ -21,7 +20,7 @@ return new class extends Migration
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
-            $table->index(['warehouse_id', 'product_id']);
+            $table->index('product_id');
             $table->index('movement_date');
             $table->index('movement_type');
             $table->index(['source_type', 'source_id']);
