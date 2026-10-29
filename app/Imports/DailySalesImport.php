@@ -4,7 +4,6 @@ namespace App\Imports;
 
 use App\Models\Customer;
 use App\Models\Product;
-use App\Models\Warehouse;
 use App\Models\DeliveryOrder;
 use App\Models\DeliveryOrderItem;
 use App\Models\Invoice;
@@ -27,12 +26,8 @@ class DailySalesImport implements ToCollection, WithStartRow, SkipsEmptyRows
 
     public function collection(Collection $rows)
     {
-        // Tambahkan query() agar Intelephense mengerti
-        $warehouse = Warehouse::query()->first();
-        if (!$warehouse) return;
-
         // Gunakan Database Transaction agar aman jika terjadi error di tengah jalan
-        DB::transaction(function () use ($rows, $warehouse) {
+        DB::transaction(function () use ($rows) {
 
             foreach ($rows as $row) {
                 $customerCode = trim($row[2] ?? '');
@@ -70,10 +65,9 @@ class DailySalesImport implements ToCollection, WithStartRow, SkipsEmptyRows
                 $deliveryOrder = DeliveryOrder::query()->firstOrCreate(
                     ['do_number' => $noFaktur],
                     [
-                        'customer_id'  => $customer->id,
-                        'warehouse_id' => $warehouse->id,
-                        'do_date'      => $doDate ?? now()->format('Y-m-d'),
-                        'status'       => 'shipped',
+                        'customer_id' => $customer->id,
+                        'do_date' => $doDate ?? now()->format('Y-m-d'),
+                        'status' => 'shipped',
                         'total_amount' => 0
                     ]
                 );
@@ -88,7 +82,7 @@ class DailySalesImport implements ToCollection, WithStartRow, SkipsEmptyRows
 
                 if ($qtyDifference != 0) {
                     $stockBalance = StockBalance::query()->firstOrCreate(
-                        ['warehouse_id' => $warehouse->id, 'product_id' => $product->id],
+                        ['product_id' => $product->id],
                         ['qty_available' => 0, 'qty_reserved' => 0]
                     );
                     $stockBalance->qty_available -= $qtyDifference;

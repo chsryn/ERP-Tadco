@@ -4,7 +4,6 @@ namespace App\Imports;
 
 use App\Models\Product;
 use App\Models\StockBalance;
-use App\Models\Warehouse;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithStartRow;
@@ -19,14 +18,6 @@ class StockImport implements ToCollection, WithStartRow, SkipsEmptyRows
 
     public function collection(Collection $rows)
     {
-        // Tambahkan query() agar Intelephense mengerti
-        $warehouse = Warehouse::query()->first();
-
-        // Jika Gudang belum di-setting, hentikan proses import stok untuk menghindari error
-        if (!$warehouse) {
-            return;
-        }
-
         foreach ($rows as $row) {
             $productCode = trim($row[1] ?? '');
 
@@ -45,8 +36,7 @@ class StockImport implements ToCollection, WithStartRow, SkipsEmptyRows
                 // Tambahkan query() agar Intelephense mengerti
                 StockBalance::query()->updateOrCreate(
                     [
-                        'product_id'   => $product->id,
-                        'warehouse_id' => $warehouse->id,
+                        'product_id' => $product->id,
                     ],
                     [
                         'qty_available' => $stokAwal,

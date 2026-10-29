@@ -46,7 +46,7 @@
                         type="text"
                         name="search"
                         class="form-control bg-light border-start-0"
-                        placeholder="Cari kode produk, nama produk, segment, uom, berat bersih..."
+                        placeholder="Cari kode produk, dynamics code, nama produk, segment, uom, berat bersih..."
                         value="{{ $search ?? '' }}"
                     >
                 </div>
@@ -59,6 +59,9 @@
                     <ul class="dropdown-menu shadow-sm p-2" id="columnToggleMenu">
                         <li><label class="dropdown-item rounded"><input type="checkbox" class="form-check-input me-2 toggle-column" data-col="col-prod-name" checked> Nama Produk</label></li>
                         <li><label class="dropdown-item rounded"><input type="checkbox" class="form-check-input me-2 toggle-column" data-col="col-prod-code" checked> Kode</label></li>
+                        <li><label class="dropdown-item rounded"><input type="checkbox" class="form-check-input me-2 toggle-column" data-col="col-prod-dynamics" checked> Dynamics Code</label></li>
+                        <li><label class="dropdown-item rounded"><input type="checkbox" class="form-check-input me-2 toggle-column" data-col="col-prod-purchase" checked> Harga Beli</label></li>
+                        <li><label class="dropdown-item rounded"><input type="checkbox" class="form-check-input me-2 toggle-column" data-col="col-prod-target" checked> Target Stock</label></li>
                         <li><label class="dropdown-item rounded"><input type="checkbox" class="form-check-input me-2 toggle-column" data-col="col-prod-price" checked> Base Price</label></li>
                         <li><label class="dropdown-item rounded"><input type="checkbox" class="form-check-input me-2 toggle-column" data-col="col-prod-uom" checked> UoM</label></li>
                         <li><label class="dropdown-item rounded"><input type="checkbox" class="form-check-input me-2 toggle-column" data-col="col-prod-weight" checked> Berat Bersih</label></li>
@@ -84,6 +87,9 @@
                     <th class="text-center" style="width: 50px;">No</th>
                     <th class="col-prod-name">Nama Produk</th>
                     <th class="col-prod-code text-center">Kode</th>
+                    <th class="col-prod-dynamics text-center">Dynamics Code</th>
+                    <th class="col-prod-purchase text-end">Harga Beli (Rp)</th>
+                    <th class="col-prod-target text-end">Target Stock</th>
                     <th class="col-prod-price text-end">Base Price (Rp)</th>
                     <th class="col-prod-uom text-center">UoM</th>
                     <th class="col-prod-weight text-center">Berat Bersih</th>
@@ -101,6 +107,9 @@
                         <td class="text-center fw-medium text-secondary text-nowrap">{{ $products->firstItem() + $loop->index }}</td>
                         <td class="fw-semibold text-dark col-prod-name">{{ $product->product_name }}</td>
                         <td class="text-center fw-bold text-dark text-nowrap col-prod-code">{{ $product->product_code }}</td>
+                        <td class="text-center text-nowrap col-prod-dynamics">{{ $product->dynamics_code ?? '-' }}</td>
+                        <td class="text-end text-nowrap col-prod-purchase">{{ $product->purchase_price !== null ? 'Rp ' . number_format((float) $product->purchase_price, 0, ',', '.') : '-' }}</td>
+                        <td class="text-end text-nowrap col-prod-target">{{ $product->target_stock !== null ? number_format((float) $product->target_stock, 0, ',', '.') : '-' }}</td>
                         <td class="text-end fw-bold text-primary text-nowrap col-prod-price">Rp {{ number_format($product->base_price, 0, ',', '.') }}</td>
                         <td class="text-center text-nowrap col-prod-uom">
                             <span class="badge {{ $currentUom === 'SACK' ? 'bg-warning-subtle text-warning-emphasis' : 'bg-info-subtle text-info-emphasis' }} px-3 py-1 rounded-pill fw-bold">
@@ -130,7 +139,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="10" class="text-center text-muted py-4">
+                        <td colspan="12" class="text-center text-muted py-4">
                             <i class="bi bi-inbox fs-3 d-block mb-2"></i>
                             Data produk belum tersedia.
                         </td>

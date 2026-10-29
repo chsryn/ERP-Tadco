@@ -107,6 +107,49 @@
 
             <div class="card border-0 shadow-sm rounded-4 mb-4">
                 <div class="card-header bg-white py-3 px-4 border-0 rounded-top-4 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-bag-check me-2 text-warning"></i>Data Purchasing</h6>
+                    <span class="badge bg-warning-subtle text-warning-emphasis rounded-pill px-3">Harga beli — terpisah dari Base Price (harga jual)</span>
+                </div>
+                <div class="card-body px-4 pb-4">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small text-secondary">Dynamics Code</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0 text-muted"><i class="bi bi-upc-scan"></i></span>
+                                <input type="text" name="dynamics_code" class="form-control bg-light border-start-0" value="{{ old('dynamics_code', $product->dynamics_code) }}" maxlength="50" placeholder="Contoh: FG-GBBP-0003">
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small text-secondary">Harga Pembelian (Rp)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0 text-muted">Rp</span>
+                                <input type="number" step="0.01" min="0" name="purchase_price" class="form-control bg-light border-start-0" value="{{ old('purchase_price', $product->purchase_price) }}" placeholder="0">
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small text-secondary">Berat (KG)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0 text-muted"><i class="bi bi-speedometer2"></i></span>
+                                <input type="number" step="0.01" min="0.01" name="weight_kg" class="form-control bg-light border-start-0" value="{{ old('weight_kg', $product->weight_kg) }}" placeholder="Contoh: 25">
+                                <span class="input-group-text bg-light">KG</span>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small text-secondary">Target Stock</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0 text-muted"><i class="bi bi-clipboard-data"></i></span>
+                                <input type="number" step="0.01" min="0" name="target_stock" class="form-control bg-light border-start-0" value="{{ old('target_stock', $product->target_stock) }}" placeholder="Contoh: 500">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-header bg-white py-3 px-4 border-0 rounded-top-4 d-flex justify-content-between align-items-center">
                     <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-percent me-2 text-success"></i>Skema Diskon Berdasarkan Strata Kuantitas</h6>
                     <span class="badge bg-primary-subtle text-primary rounded-pill px-3" id="strata_badge">BOX: Strata S1 s/d S5</span>
                 </div>

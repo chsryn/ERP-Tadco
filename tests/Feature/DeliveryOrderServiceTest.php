@@ -5,10 +5,9 @@ namespace Tests\Feature;
 use App\Models\Customer;
 use App\Models\DeliveryOrder;
 use App\Models\Product;
-use App\Models\ProductPrice;
+use App\Models\ProductDiscount;
 use App\Models\StockBalance;
 use App\Models\User;
-use App\Models\Warehouse;
 use App\Services\DeliveryOrderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -19,7 +18,6 @@ class DeliveryOrderServiceTest extends TestCase
     use RefreshDatabase;
 
     protected DeliveryOrderService $service;
-    protected Warehouse $warehouse;
     protected Customer $customer;
     protected Product $product;
     protected User $user;
@@ -32,12 +30,6 @@ class DeliveryOrderServiceTest extends TestCase
 
         $this->user = User::factory()->create();
         $this->actingAs($this->user);
-
-        $this->warehouse = Warehouse::create([
-            'warehouse_code' => 'WH01',
-            'warehouse_name' => 'Main Warehouse',
-            'is_active' => true,
-        ]);
 
         $this->customer = Customer::create([
             'customer_code' => 'CUST01',
@@ -53,14 +45,13 @@ class DeliveryOrderServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        \App\Models\ProductDiscount::create([
+        ProductDiscount::create([
             'product_id' => $this->product->id,
             'strata_level' => 'S1',
             'discount_percentage' => 10.00,
         ]);
 
         StockBalance::create([
-            'warehouse_id' => $this->warehouse->id,
             'product_id' => $this->product->id,
             'qty_available' => 100,
             'qty_reserved' => 0,
@@ -90,8 +81,7 @@ class DeliveryOrderServiceTest extends TestCase
         $this->assertEquals('validated', $do->status);
         $this->assertEquals(900000.0, (float) $do->total_amount);
 
-        $stockBalance = StockBalance::where('warehouse_id', $this->warehouse->id)
-            ->where('product_id', $this->product->id)
+        $stockBalance = StockBalance::where('product_id', $this->product->id)
             ->first();
 
         $this->assertEquals(10.0, (float) $stockBalance->qty_reserved);
@@ -138,8 +128,7 @@ class DeliveryOrderServiceTest extends TestCase
 
         $this->assertEquals('cancelled', $cancelledDo->status);
 
-        $stockBalance = StockBalance::where('warehouse_id', $this->warehouse->id)
-            ->where('product_id', $this->product->id)
+        $stockBalance = StockBalance::where('product_id', $this->product->id)
             ->first();
 
         $this->assertEquals(0.0, (float) $stockBalance->qty_reserved);
@@ -167,8 +156,7 @@ class DeliveryOrderServiceTest extends TestCase
         $this->assertEquals('delivered', $deliveredDo->status);
         $this->assertEquals('2026-08-10', $deliveredDo->received_date->format('Y-m-d'));
 
-        $stockBalance = StockBalance::where('warehouse_id', $this->warehouse->id)
-            ->where('product_id', $this->product->id)
+        $stockBalance = StockBalance::where('product_id', $this->product->id)
             ->first();
 
         $this->assertEquals(0.0, (float) $stockBalance->qty_reserved);

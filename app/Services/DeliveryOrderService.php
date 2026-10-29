@@ -5,9 +5,7 @@ namespace App\Services;
 use App\Models\DeliveryOrder;
 use App\Models\DeliveryOrderItem;
 use App\Models\Product;
-use App\Models\ProductPrice;
 use App\Models\StockBalance;
-use App\Models\Warehouse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -24,27 +22,18 @@ class DeliveryOrderService
      */
     public function createDeliveryOrder(array $validatedData, array $items, ?int $salesId): DeliveryOrder
     {
-        $defaultWarehouse = Warehouse::query()->first();
-
-        if (!$defaultWarehouse) {
-            throw ValidationException::withMessages([
-                'warehouse_id' => 'Gudang default belum tersedia di sistem. Harap buat data gudang terlebih dahulu.',
-            ]);
-        }
-
         if (empty($items)) {
             throw ValidationException::withMessages([
                 'product_id' => 'Minimal harus ada 1 item produk pada Delivery Order.',
             ]);
         }
 
-        return DB::transaction(function () use ($validatedData, $items, $defaultWarehouse, $salesId) {
+        return DB::transaction(function () use ($validatedData, $items, $salesId) {
             $totalAmount = 0;
 
             $deliveryOrder = DeliveryOrder::query()->create([
                 'do_number' => $this->generateDoNumber(),
                 'customer_id' => $validatedData['customer_id'],
-                'warehouse_id' => $defaultWarehouse->id,
                 'sales_id' => $salesId,
                 'do_date' => $validatedData['do_date'],
                 'planned_delivery_date' => $validatedData['planned_delivery_date'] ?? null,
@@ -56,14 +45,12 @@ class DeliveryOrderService
             foreach ($items as $item) {
                 /** @var StockBalance|null $stockBalance */
                 $stockBalance = StockBalance::query()
-                    ->where('warehouse_id', '=', $defaultWarehouse->id)
                     ->where('product_id', '=', $item['product_id'])
                     ->lockForUpdate()
                     ->first();
 
                 if (!$stockBalance) {
                     $stockBalance = StockBalance::create([
-                        'warehouse_id' => $defaultWarehouse->id,
                         'product_id' => $item['product_id'],
                         'qty_available' => 0,
                         'qty_reserved' => 0,
@@ -80,7 +67,7 @@ class DeliveryOrderService
                     $requestedFormatted = number_format($qty, 2, ',', '.');
                     $productName = $product->product_name ?? 'Produk';
                     throw ValidationException::withMessages([
-                        'qty' => "Stok {$productName} tidak mencukupi di {$defaultWarehouse->warehouse_name}. Stok tersedia: {$availFormatted}, Jumlah diminta: {$requestedFormatted}.",
+                        'qty' => "Stok {$productName} tidak mencukupi. Stok tersedia: {$availFormatted}, Jumlah diminta: {$requestedFormatted}.",
                     ]);
                 }
 
@@ -150,7 +137,6 @@ class DeliveryOrderService
             foreach ($deliveryOrder->items as $item) {
                 /** @var StockBalance|null $stockBalance */
                 $stockBalance = StockBalance::query()
-                    ->where('warehouse_id', '=', $deliveryOrder->warehouse_id)
                     ->where('product_id', '=', $item->product_id)
                     ->lockForUpdate()
                     ->first();
@@ -169,6 +155,60 @@ class DeliveryOrderService
             ]);
 
             return $deliveryOrder;
+        });
+    }
+
+    /**
+     * Mark delivery order as delivered and deduct stock.
+     */
+    public function markAsDelivered(DeliveryOrder $deliveryOrder, string $receivedDate, ?int $userId = null): DeliveryOrder
+    {
+        if ($deliveryOrder->status === 'delivered') {
+            throw ValidationException::withMessages([
+                'status' => 'Delivery Order sudah dalam status delivered.',
+            ]);
+        }
+
+        if ($deliveryOrder->status === 'cancelled') {
+            throw ValidationException::withMessages([
+                'status' => 'Delivery Order yang dibatalkan tidak bisa ditandai sebagai delivered.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($deliveryOrder, $receivedDate) {
+            $deliveryOrder->load('items');
+
+            foreach ($deliveryOrder->items as $item) {
+                /** @var StockBalance|null $stockBalance */
+                $stockBalance = StockBalance::query()
+                    ->where('product_id', '=', $item->product_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$stockBalance) {
+                    throw ValidationException::withMessages([
+                        'qty' => 'Stok produk tidak ditemukan.',
+                    ]);
+                }
+
+                $qty = (float) $item->qty;
+                if ((float) $stockBalance->qty_reserved < $qty || (float) $stockBalance->qty_available < $qty) {
+                    throw ValidationException::withMessages([
+                        'qty' => 'Stok/Reserved tidak mencukupi untuk dikirim.',
+                    ]);
+                }
+
+                $stockBalance->qty_reserved = (float) $stockBalance->qty_reserved - $qty;
+                $stockBalance->qty_available = (float) $stockBalance->qty_available - $qty;
+                $stockBalance->save();
+            }
+
+            $deliveryOrder->update([
+                'status' => 'delivered',
+                'received_date' => $receivedDate,
+            ]);
+
+            return $deliveryOrder->fresh();
         });
     }
 

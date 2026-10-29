@@ -7,7 +7,6 @@ use App\Models\DeliveryOrder;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
-use App\Models\Warehouse;
 use App\Services\PaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -31,12 +30,6 @@ class PaymentServiceTest extends TestCase
         $this->user = User::factory()->create();
         $this->actingAs($this->user);
 
-        $warehouse = Warehouse::create([
-            'warehouse_code' => 'WH01',
-            'warehouse_name' => 'Main Warehouse',
-            'is_active' => true,
-        ]);
-
         $this->customer = Customer::create([
             'customer_code' => 'CUST01',
             'customer_name' => 'Test Customer',
@@ -46,7 +39,6 @@ class PaymentServiceTest extends TestCase
         $do = DeliveryOrder::create([
             'do_number' => 'DO-20260804-002',
             'customer_id' => $this->customer->id,
-            'warehouse_id' => $warehouse->id,
             'sales_id' => $this->user->id,
             'do_date' => '2026-08-04',
             'total_amount' => 1000000.00,

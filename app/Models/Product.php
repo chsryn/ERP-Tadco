@@ -17,11 +17,19 @@ class Product extends Model
         'net_weight',
         'segment',
         'is_active',
+        // SCM-02 purchasing data
+        'dynamics_code',
+        'purchase_price',
+        'weight_kg',
+        'target_stock',
     ];
 
     protected $casts = [
         'base_price' => 'decimal:2',
         'is_active' => 'boolean',
+        'purchase_price' => 'decimal:2',
+        'weight_kg' => 'decimal:2',
+        'target_stock' => 'decimal:2',
     ];
 
     public function discounts()
@@ -42,6 +50,11 @@ class Product extends Model
     public function stockMovements()
     {
         return $this->hasMany(StockMovement::class);
+    }
+
+    public function purchaseOrderItems()
+    {
+        return $this->hasMany(PurchaseOrderItem::class);
     }
 
     public function getMaxStrataLevelAttribute(): ?string

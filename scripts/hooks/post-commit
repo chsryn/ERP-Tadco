@@ -1,0 +1,48 @@
+#!/bin/sh
+# Auto-log commit ERP ke Obsidian vault.
+# Dipasang lewat: git config core.hooksPath scripts/hooks
+# Override vault: ERP_NOTE_VAULT=/path/ke/vault
+# Nonaktifkan sekali: SKIP_ERP_NOTE=1 git commit ...
+
+VAULT="${ERP_NOTE_VAULT:-D:/skripsi.md/smart-erp}"
+[ "$SKIP_ERP_NOTE" = "1" ] && exit 0
+[ -d "$VAULT" ] || { echo "erp-note: vault tidak ditemukan ($VAULT), dilewati"; exit 0; }
+
+DIR="$VAULT/Log Perubahan"
+FILE="$DIR/$(date +%Y-%m-%d).md"
+mkdir -p "$DIR" || exit 0
+
+HASH=$(git rev-parse --short HEAD)
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+MSG=$(git log -1 --pretty=%s)
+TIME=$(date +%H:%M)
+STAT=$(git show --shortstat --format= HEAD | sed 's/^ *//')
+
+if [ ! -f "$FILE" ]; then
+  {
+    echo "---"
+    echo "title: Log Perubahan $(date +%Y-%m-%d)"
+    echo "date: $(date +%Y-%m-%d)"
+    echo "tags:"
+    echo "  - smart-erp"
+    echo "  - log-perubahan"
+    echo "---"
+    echo ""
+    echo "# Log Perubahan $(date +%Y-%m-%d)"
+    echo ""
+    echo "Catatan otomatis dari git hook. Jangan diedit manual; tambahkan catatan semantik di root vault."
+    echo ""
+  } > "$FILE"
+fi
+
+{
+  echo "## $TIME - $MSG"
+  echo ""
+  echo "- Branch: \`$BRANCH\` | Commit: \`$HASH\`"
+  [ -n "$STAT" ] && echo "- $STAT"
+  echo "- File:"
+  git show --name-status --format= HEAD | sed 's/\t/ /' | sed 's/^/  - \`/; s/$/\`/'
+  echo ""
+} >> "$FILE"
+
+exit 0

@@ -12,7 +12,6 @@ class StockService
     {
         foreach ($deliveryOrder->items as $item) {
             $stockBalance = StockBalance::query()
-                ->where('warehouse_id', $deliveryOrder->warehouse_id) // Menggunakan warehouse dari DO
                 ->where('product_id', $item->product_id)
                 ->lockForUpdate()
                 ->first();
@@ -31,7 +30,6 @@ class StockService
             $stockBalance->save();
 
             StockMovement::query()->create([
-                'warehouse_id' => $stockBalance->warehouse_id,
                 'product_id' => $item->product_id,
                 'movement_date' => $shipmentDate,
                 'movement_type' => 'out',
@@ -48,7 +46,6 @@ class StockService
     {
         foreach ($deliveryOrder->items as $item) {
             $stockBalance = StockBalance::query()
-                ->where('warehouse_id', $deliveryOrder->warehouse_id)
                 ->where('product_id', $item->product_id)
                 ->lockForUpdate()
                 ->first();
@@ -62,7 +59,6 @@ class StockService
 
                 // Catat pergerakan pembalik (In) untuk audit
                 StockMovement::query()->create([
-                    'warehouse_id' => $stockBalance->warehouse_id,
                     'product_id' => $item->product_id,
                     'movement_date' => now(),
                     'movement_type' => 'in',

@@ -6,7 +6,6 @@ use App\Models\Customer;
 use App\Models\DeliveryOrder;
 use App\Models\Invoice;
 use App\Models\User;
-use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -16,7 +15,6 @@ class InvoiceModelTest extends TestCase
 
     protected User $user;
     protected Customer $customer;
-    protected Warehouse $warehouse;
     protected DeliveryOrder $deliveryOrder;
 
     protected function setUp(): void
@@ -32,16 +30,9 @@ class InvoiceModelTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->warehouse = Warehouse::create([
-            'warehouse_code' => 'WH01',
-            'warehouse_name' => 'Main Warehouse',
-            'is_active' => true,
-        ]);
-
         $this->deliveryOrder = DeliveryOrder::create([
             'do_number' => 'DO-20260804-001',
             'customer_id' => $this->customer->id,
-            'warehouse_id' => $this->warehouse->id,
             'sales_id' => $this->user->id,
             'do_date' => '2026-08-04',
             'total_amount' => 500000.00,

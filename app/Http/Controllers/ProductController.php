@@ -20,7 +20,8 @@ class ProductController extends Controller
                     ->orWhere('product_name', 'like', "%{$search}%")
                     ->orWhere('segment', 'like', "%{$search}%")
                     ->orWhere('uom', 'like', "%{$search}%")
-                    ->orWhere('net_weight', 'like', "%{$search}%");
+                    ->orWhere('net_weight', 'like', "%{$search}%")
+                    ->orWhere('dynamics_code', 'like', "%{$search}%");
             })
             ->orderBy('product_code')
             ->paginate(10)
@@ -49,6 +50,12 @@ class ProductController extends Controller
             'segment' => ['nullable', 'string', 'max:150'],
             'is_active' => ['nullable', 'boolean'],
 
+            // SCM-02 purchasing data
+            'dynamics_code' => ['nullable', 'string', 'max:50', 'unique:products,dynamics_code'],
+            'purchase_price' => ['nullable', 'numeric', 'min:0'],
+            'weight_kg' => ['nullable', 'numeric', 'gt:0'],
+            'target_stock' => ['nullable', 'numeric', 'min:0'],
+
             'discounts' => ['nullable', 'array'],
             'discounts.*.min_qty' => ['nullable', 'numeric', 'min:0'],
             'discounts.*.max_qty' => ['nullable', 'numeric', 'min:0'],
@@ -66,6 +73,10 @@ class ProductController extends Controller
                 'net_weight' => $validated['net_weight'] ?? null,
                 'segment' => $validated['segment'] ?? null,
                 'is_active' => $request->boolean('is_active'),
+                'dynamics_code' => $validated['dynamics_code'] ?? null,
+                'purchase_price' => $validated['purchase_price'] ?? null,
+                'weight_kg' => $validated['weight_kg'] ?? null,
+                'target_stock' => $validated['target_stock'] ?? null,
             ]);
 
             $tiers = $uom === 'SACK'
@@ -124,6 +135,17 @@ class ProductController extends Controller
             'segment' => ['nullable', 'string', 'max:150'],
             'is_active' => ['nullable', 'boolean'],
 
+            // SCM-02 purchasing data
+            'dynamics_code' => [
+                'nullable',
+                'string',
+                'max:50',
+                Rule::unique('products', 'dynamics_code')->ignore($product->id),
+            ],
+            'purchase_price' => ['nullable', 'numeric', 'min:0'],
+            'weight_kg' => ['nullable', 'numeric', 'gt:0'],
+            'target_stock' => ['nullable', 'numeric', 'min:0'],
+
             'discounts' => ['nullable', 'array'],
             'discounts.*.min_qty' => ['nullable', 'numeric', 'min:0'],
             'discounts.*.max_qty' => ['nullable', 'numeric', 'min:0'],
@@ -141,6 +163,10 @@ class ProductController extends Controller
                 'net_weight' => $validated['net_weight'] ?? null,
                 'segment' => $validated['segment'] ?? null,
                 'is_active' => $request->boolean('is_active'),
+                'dynamics_code' => $validated['dynamics_code'] ?? null,
+                'purchase_price' => $validated['purchase_price'] ?? null,
+                'weight_kg' => $validated['weight_kg'] ?? null,
+                'target_stock' => $validated['target_stock'] ?? null,
             ]);
 
             $tiers = $uom === 'SACK'

@@ -79,6 +79,36 @@
         </div>
 
         <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-header bg-white py-3 px-4 border-0 rounded-top-4">
+                <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-bag-check me-2 text-warning"></i>Data Purchasing</h6>
+            </div>
+            <div class="card-body px-4 pb-4">
+                <div class="table-responsive">
+                    <table class="table table-borderless align-middle mb-0">
+                        <tbody>
+                            <tr class="border-bottom border-light">
+                                <th style="width: 220px;" class="text-secondary fw-semibold">Dynamics Code</th>
+                                <td class="fw-medium text-dark">{{ $product->dynamics_code ?? '-' }}</td>
+                            </tr>
+                            <tr class="border-bottom border-light">
+                                <th class="text-secondary fw-semibold">Harga Pembelian</th>
+                                <td class="fw-bold text-dark">{{ $product->purchase_price !== null ? 'Rp ' . number_format((float) $product->purchase_price, 0, ',', '.') : '-' }}</td>
+                            </tr>
+                            <tr class="border-bottom border-light">
+                                <th class="text-secondary fw-semibold">Berat (KG)</th>
+                                <td class="fw-medium text-dark">{{ $product->weight_kg !== null ? rtrim(rtrim(number_format((float) $product->weight_kg, 2, ',', '.'), '0'), ',') . ' KG' : '-' }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-secondary fw-semibold">Target Stock</th>
+                                <td class="fw-medium text-dark">{{ $product->target_stock !== null ? number_format((float) $product->target_stock, 0, ',', '.') : '-' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
             <div class="card-header bg-white py-3 px-4 border-0 rounded-top-4 d-flex justify-content-between align-items-center">
                 <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-percent me-2 text-success"></i>Skema Diskon Kuantitas (Volume Discount)</h6>
                 <span class="badge bg-primary-subtle text-primary rounded-pill px-3">Aturan: Base Price - (Base Price * Diskon %)</span>

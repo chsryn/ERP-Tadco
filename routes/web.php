@@ -1,8 +1,11 @@
 <?php
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AiChatController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\PurchaseOrderController;
+use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\CustomerController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\InventoryController;
@@ -38,12 +41,33 @@ Route::middleware('auth')->group(function () {
     // Dashboard route
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
 
+    // AI Assistant read-only (admin, sales, finance)
+    Route::post('/ai/chat', AiChatController::class)
+        ->middleware(['role:admin|sales|finance', 'throttle:' . config('ai.rate_limit', '20,1')])
+        ->name('ai.chat');
+
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     // Resource routes
     Route::resource('customers', CustomerController::class);
     Route::post('/customers/ajax', [App\Http\Controllers\CustomerController::class, 'storeAjax'])->name('customers.store_ajax');
     Route::resource('products', ProductController::class);
+
+    // Supplier (SCM inbound) — admin only
+    Route::resource('suppliers', SupplierController::class)->middleware('role:admin');
+
+    // Purchase Order (SCM inbound) — admin only
+    Route::middleware('role:admin')->group(function () {
+        Route::resource('purchase-orders', PurchaseOrderController::class)
+            ->except('destroy')
+            ->parameters(['purchase-orders' => 'purchaseOrder'])
+            ->names('purchase_orders');
+
+        Route::post('/purchase-orders/{purchaseOrder}/confirm', [PurchaseOrderController::class, 'confirm'])
+            ->name('purchase_orders.confirm');
+        Route::post('/purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel'])
+            ->name('purchase_orders.cancel');
+    });
 
     // Import routes
     Route::get('/imports', [ImportController::class, 'index'])->name('imports.index');
