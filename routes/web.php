@@ -5,6 +5,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\PurchaseOrderController;
+use App\Http\Controllers\ReorderController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\CustomerController;
 use Illuminate\Support\Facades\Route;
@@ -58,6 +59,12 @@ Route::middleware('auth')->group(function () {
 
     // Purchase Order (SCM inbound) — admin only
     Route::middleware('role:admin')->group(function () {
+        // Auto PO / reorder harus didaftarkan sebelum resource agar tidak tertangkap {purchaseOrder}
+        Route::get('/purchase-orders/reorder', [ReorderController::class, 'index'])
+            ->name('purchase_orders.reorder');
+        Route::post('/purchase-orders/reorder', [ReorderController::class, 'generate'])
+            ->name('purchase_orders.reorder.generate');
+
         Route::resource('purchase-orders', PurchaseOrderController::class)
             ->except('destroy')
             ->parameters(['purchase-orders' => 'purchaseOrder'])

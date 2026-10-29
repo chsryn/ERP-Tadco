@@ -5,9 +5,14 @@
 @section('page_subtitle', 'Daftar PO pembelian supplier / principal')
 
 @section('page_action')
-<a href="{{ route('purchase_orders.create') }}" class="btn btn-primary px-4 rounded-pill fw-semibold shadow-sm">
-    <i class="bi bi-plus-lg me-1"></i> Buat PO
-</a>
+<div class="d-flex gap-2">
+    <a href="{{ route('purchase_orders.reorder') }}" class="btn btn-outline-primary px-3 rounded-pill fw-semibold">
+        <i class="bi bi-arrow-repeat me-1"></i> Auto PO
+    </a>
+    <a href="{{ route('purchase_orders.create') }}" class="btn btn-primary px-4 rounded-pill fw-semibold shadow-sm">
+        <i class="bi bi-plus-lg me-1"></i> Buat PO
+    </a>
+</div>
 @endsection
 
 @section('content')

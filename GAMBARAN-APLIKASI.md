@@ -15,7 +15,7 @@ Smart ERP TADCo adalah aplikasi web internal untuk mengelola:
 1. **Master data** — customer, produk, supplier.
 2. **Persediaan** — saldo stok per produk, kartu stok, penyesuaian manual.
 3. **Penjualan (outbound)** — Delivery Order, Shipment, Invoice, Payment.
-4. **Pembelian (inbound / SCM)** — Supplier Master, Data Purchasing produk, Purchase Order.
+4. **Pembelian (inbound / SCM)** — Supplier Master, Data Purchasing produk, Purchase Order, rekomendasi Auto PO (draft).
 5. **Laporan** — stok, penjualan, piutang, pembayaran (dengan ekspor Excel).
 6. **Asisten AI read-only** — ringkasan data sesuai role, tanpa kemampuan menulis.
 
@@ -85,6 +85,7 @@ Pola yang konsisten dipakai:
 | Master Produk | `products`, `product_discounts` | `/products` | auth |
 | Master Supplier (SCM-01) | `suppliers` | `/suppliers` | `role:admin` |
 | Purchase Order (SCM-03) | `purchase_orders`, `purchase_order_items`, `document_sequences` | `/purchase-orders` | `role:admin` |
+| Auto PO / Reorder (SCM-04) | `products`, `stock_balances`, `purchase_orders` (real-time, tanpa tabel baru) | `/purchase-orders/reorder` | `role:admin` |
 | Persediaan | `stock_balances`, `stock_movements` | `/inventory`, `/inventory/adjustment` | auth |
 | Delivery Order | `delivery_orders`, `delivery_order_items` | `/delivery-orders` | auth |
 | Shipment | `shipments` | `/shipments` | auth |
@@ -300,11 +301,11 @@ Belum ada: audit log interaksi AI (`AiInteraction`), evaluation suite, agent loo
 
 ```text
 app/
-  Http/Controllers/     16 controller + base (thin)
+  Http/Controllers/     17 controller + base (thin)
   Http/Requests/        FormRequest (PO, Supplier, AI)
   Models/               17 model Eloquent
   Services/             DeliveryOrderService, InvoiceService, PaymentService,
-                        PurchaseOrderService, StockService
+                        PurchaseOrderService, ReorderService, StockService
   Services/Ai/          AiAssistantService, AiContextBuilder
   Exports/ Imports/     Excel
 database/
@@ -327,7 +328,7 @@ routes/web.php          seluruh route web
 | `php artisan test --testsuite=Feature` | **60 passed**, 215 assertions |
 | `php artisan test` (polos) | gagal — `tests/Unit` tidak ada (pre-existing) |
 
-Cakupan test yang ada: `PaymentServiceTest`, `InvoiceServiceTest`, `InvoiceModelTest`, `DeliveryOrderServiceTest`, `AiChatEndpointTest`, `SupplierTest` (10), `ProductPurchasingTest` (10), `PurchaseOrderTest` (21).
+Cakupan test yang ada: `PaymentServiceTest`, `InvoiceServiceTest`, `InvoiceModelTest`, `DeliveryOrderServiceTest`, `AiChatEndpointTest`, `SupplierTest` (10), `ProductPurchasingTest` (10), `PurchaseOrderTest` (21), `ReorderTest` (28). Total Feature suite: 88 test / 281 assertion.
 
 Test memakai SQLite in-memory (`phpunit.xml`) dengan `RefreshDatabase`. **Jangan** mengarahkan test ke database MySQL dev — `RefreshDatabase` akan mengosongkannya.
 
@@ -378,13 +379,13 @@ Roadmap SCM:
 SCM-01  Supplier Master                    selesai
 SCM-02  Product Purchasing Data            selesai
 SCM-03  Purchase Order Foundation          selesai
-SCM-04  Auto PO / Reorder Point            berikutnya (belum)
-SCM-05  Print / Confirm Order final        belum
+SCM-04  Auto PO / Reorder Point            selesai (rekomendasi + draft)
+SCM-05  Print / Confirm Order final        berikutnya (belum)
 SCM-06  Purchase Receipt                   belum
 SCM-07  Stock IN via StockService          belum
 ```
 
-Rumus reorder yang sudah disepakati untuk SCM-04:
+Rumus reorder yang dipakai SCM-04 (`app/Services/ReorderService.php`):
 
 ```text
 available_for_reorder = qty_available - qty_reserved
@@ -410,13 +411,13 @@ Test:
 php artisan test --testsuite=Feature
 ```
 
-Seeder MySQL yang belum dijalankan di DB dev: `php artisan db:seed --class=SupplierSeeder` (agar EPFM tersedia untuk PO nyata), lalu isi `purchase_price`/`weight_kg` produk sebelum membuat PO.
+`php artisan db:seed --class=SupplierSeeder` sudah dijalankan di MySQL dev (`SUP-EPFM` / EPFM, aktif). Isi `target_stock`, `purchase_price`, dan `weight_kg` produk agar produk muncul di `/purchase-orders/reorder`.
 
 ---
 
 ## 17. Ringkasan satu paragraf
 
-Smart ERP TADCo adalah monolith Laravel server-rendered untuk distribusi barang: master customer/produk/supplier, persediaan berbasis `stock_balances` + kartu stok, alur penjualan DO → Shipment → Invoice → Payment dengan reservasi dan pemotongan stok yang dijaga transaksi, laporan Excel, serta fondasi pengadaan (supplier → data purchasing produk → PO draft/confirm) dengan penomoran concurrency-safe dan snapshot harga. Lapisan AI bersifat read-only, nonaktif secara default, dan dibatasi per role. Yang belum ada: penerimaan barang, stock IN dari pembelian, reorder point, auto PO, cetak PO final, dan audit trail menyeluruh.
+Smart ERP TADCo adalah monolith Laravel server-rendered untuk distribusi barang: master customer/produk/supplier, persediaan berbasis `stock_balances` + kartu stok, alur penjualan DO → Shipment → Invoice → Payment dengan reservasi dan pemotongan stok yang dijaga transaksi, laporan Excel, serta fondasi pengadaan (supplier → data purchasing produk → PO draft/confirm → rekomendasi Auto PO) dengan penomoran concurrency-safe dan snapshot harga. Lapisan AI bersifat read-only, nonaktif secara default, dan dibatasi per role. Yang belum ada: penerimaan barang, stock IN dari pembelian, cetak PO final, dan audit trail menyeluruh.
 
 ---
 
