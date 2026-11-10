@@ -15,7 +15,7 @@ Smart ERP TADCo adalah aplikasi web internal untuk mengelola:
 1. **Master data** — customer, produk, supplier.
 2. **Persediaan** — saldo stok per produk, kartu stok, penyesuaian manual.
 3. **Penjualan (outbound)** — Delivery Order, Shipment, Invoice, Payment.
-4. **Pembelian (inbound / SCM)** — Supplier Master, Data Purchasing produk, Purchase Order, rekomendasi Auto PO (draft).
+4. **Pembelian (inbound / SCM)** — Supplier Master, Data Purchasing produk, Purchase Order, rekomendasi Auto PO (draft), dokumen Confirm Order yang bisa dicetak, Purchase Receipt (penerimaan barang + tracking qty, tanpa Stock IN).
 5. **Laporan** — stok, penjualan, piutang, pembayaran (dengan ekspor Excel).
 6. **Asisten AI read-only** — ringkasan data sesuai role, tanpa kemampuan menulis.
 
@@ -37,7 +37,7 @@ Prinsip yang dipegang di repo ini:
 | Bahasa / runtime | PHP `^8.3` |
 | Framework | Laravel `^13.8` |
 | Database | MySQL (dev: Laragon `erp_tadco`), SQLite in-memory untuk test |
-| Otorisasi | `spatie/laravel-permission ^8` (role: `admin`, `sales`, `finance`) |
+| Otorisasi | `spatie/laravel-permission ^8` (role: `admin`, `sales`, `finance`; permission Purchasing: 15, `admin` = semua) |
 | Excel | `maatwebsite/excel` + `phpoffice/phpspreadsheet` |
 | Tampilan | Blade + Bootstrap 5.3.3 (CDN) + Bootstrap Icons + `public/css/metronic.css`, JavaScript vanilla inline (tanpa build step di layout) |
 | Test | PHPUnit 12, `RefreshDatabase`, feature test |
@@ -51,7 +51,7 @@ Tidak ada SPA, tidak ada API publik, tidak ada queue worker wajib. Semua route w
 
 ```text
 routes/web.php
-   │  middleware: auth, role:admin, role:admin|sales|finance, throttle
+   │  middleware: auth, permission:<modul>.<aksi>, role:admin|sales|finance, throttle
    ▼
 app/Http/Controllers/*          ← tipis: validasi request, panggil service, kembalikan view
    │  app/Http/Requests/*       ← validasi terstruktur (khusus modul tertentu)
@@ -83,9 +83,12 @@ Pola yang konsisten dipakai:
 | Pencarian global | customer + produk | `/search/global` | auth |
 | Master Customer | `customers` | `/customers` | auth |
 | Master Produk | `products`, `product_discounts` | `/products` | auth |
-| Master Supplier (SCM-01) | `suppliers` | `/suppliers` | `role:admin` |
-| Purchase Order (SCM-03) | `purchase_orders`, `purchase_order_items`, `document_sequences` | `/purchase-orders` | `role:admin` |
-| Auto PO / Reorder (SCM-04) | `products`, `stock_balances`, `purchase_orders` (real-time, tanpa tabel baru) | `/purchase-orders/reorder` | `role:admin` |
+| Master Supplier (SCM-01) | `suppliers` | `/suppliers` | `permission:suppliers.*` |
+| Purchase Order (SCM-03) | `purchase_orders`, `purchase_order_items`, `document_sequences` | `/purchase-orders` | `permission:purchase-orders.*` |
+| Auto PO / Reorder (SCM-04) | `products`, `stock_balances`, `purchase_orders` (real-time, tanpa tabel baru) | `/purchase-orders/reorder` | `permission:auto-po.*` |
+| Confirm Order / Print (SCM-05) | `purchase_orders`, `purchase_order_items` (tanpa tabel baru) | `/purchase-orders/{purchaseOrder}/print` | `permission:purchase-orders.print` |
+| Purchase Receipt (SCM-06) | `purchase_receipts`, `purchase_receipt_items`, `purchase_order_items.qty_received` | `/purchase-receipts` | `permission:purchase-receipts.*` |
+| Stock IN Receipt (SCM-07) | `stock_balances`, `stock_movements` (`source_type = po_receipt`) | `/purchase-receipts/{purchaseReceipt}/stock-in` | `permission:purchase-receipts.process-stock-in` |
 | Persediaan | `stock_balances`, `stock_movements` | `/inventory`, `/inventory/adjustment` | auth |
 | Delivery Order | `delivery_orders`, `delivery_order_items` | `/delivery-orders` | auth |
 | Shipment | `shipments` | `/shipments` | auth |
@@ -134,14 +137,15 @@ flowchart LR
     C -->|cancel| E[PO cancelled]
     D -->|cancel| E
     D -.->|SCM-04| F[qty_on_order / reorder point]
-    D -.->|SCM-06/07| G[Purchase Receipt<br/>Stock IN via StockService]
+    D -->|SCM-06 receipt| H[PO partial / received]
+    H -->|SCM-07 Stock IN| I[stock_balances.qty_available + qty_received<br/>stock_movements type in]
 ```
 
-Yang **sudah** ada: supplier, data pembelian produk, PO draft/confirm/cancel, nomor PO concurrency-safe, snapshot produk, PPN 11% snapshot.
+Yang **sudah** ada: supplier, data pembelian produk, PO draft/confirm/cancel, nomor PO concurrency-safe, snapshot produk, PPN 11% snapshot, rekomendasi Auto PO (draft), dokumen Confirm Order siap cetak (browser print), Purchase Receipt (partial/full, tracking `qty_received`, nomor receipt concurrency-safe), dan Stock IN eksplisit dari receipt ke inventory existing (`StockService::processPurchaseReceipt()`).
 
-Yang **belum** ada: purchase receipt, stock IN dari pembelian, `qty_on_order`, reorder point, auto PO, cetak/PDF PO, kirim PO via email/WhatsApp.
+Yang **belum** ada: ekspor PDF, kirim PO via email/WhatsApp.
 
-**PO tidak menyentuh stok sama sekali.** Stok baru bertambah saat penerimaan barang dibuat di fase berikutnya.
+**PO dan Purchase Receipt tidak menyentuh stok.** Stok hanya bertambah saat action **Process Stock IN** dijalankan pada detail receipt (SCM-07), sekali per receipt.
 
 ---
 
@@ -162,7 +166,7 @@ Yang **belum** ada: purchase receipt, stock IN dari pembelian, `qty_on_order`, r
 | Tabel | Isi penting |
 | --- | --- |
 | `stock_balances` | satu baris per produk: `qty_available`, `qty_reserved` |
-| `stock_movements` | kartu stok: `movement_date`, `movement_type` (`in`, `out`, `return`, `damage`, `adjustment_in`, `adjustment_out`), `qty`, `source_type`, `source_id`, `notes`, `created_by` |
+| `stock_movements` | kartu stok: `movement_date`, `movement_type` (`in`, `out`, `return`, `damage`, `adjustment_in`, `adjustment_out`), `qty`, `source_type` (`shipment`, `manual_adjustment`, `po_receipt`), `source_id`, `notes`, `created_by` |
 
 ### 6.3 Penjualan
 
@@ -182,6 +186,8 @@ Yang **belum** ada: purchase receipt, stock IN dari pembelian, `qty_on_order`, r
 | `document_sequences` | counter nomor dokumen: `document_type`, `period` (`YYYY-MM`), `last_number`; **unik** `(document_type, period)` |
 | `purchase_orders` | `po_number` unik, `period`, `supplier_id`, `po_date`, status, `subtotal`, `special_discount_total`, `ppn_rate`, `ppn_amount`, `grand_total`, `created_by`, `notes` |
 | `purchase_order_items` | `product_id` + snapshot `dynamics_code`, `weight_kg`, `price`; `qty_plan`, `qty_ton`, `week_1..week_4`, `special_discount`, `price_nett`, `total_price`, `qty_received` |
+| `purchase_receipts` | `receipt_number` unik, `purchase_order_id` (`RESTRICT`), `receipt_date`, `status` (default `posted`), `notes`, `created_by` (`SET NULL`) |
+| `purchase_receipt_items` | `purchase_receipt_id` (`CASCADE`), `purchase_order_item_id` (`RESTRICT`), `product_id` (`RESTRICT`), `qty_received`, snapshot `weight_kg`, `qty_ton` |
 
 ### 6.5 Relasi kunci
 
@@ -193,10 +199,11 @@ Invoice 1─n Payment
 Product 1─n StockBalance
 Product 1─n StockMovement
 Supplier 1─n PurchaseOrder 1─n PurchaseOrderItem n─1 Product
-User 1─n (DeliveryOrder.sales_id, PurchaseOrder.created_by, semua created_by)
+PurchaseOrder 1─n PurchaseReceipt 1─n PurchaseReceiptItem n─1 PurchaseOrderItem
+User 1─n (DeliveryOrder.sales_id, PurchaseOrder.created_by, PurchaseReceipt.created_by, semua created_by)
 ```
 
-Delete behavior penting: `delivery_order_id` pada invoice `RESTRICT`, `customer_id` `RESTRICT`, `supplier_id` pada PO `RESTRICT`, item PO `CASCADE` bila PO dihapus, `created_by` `SET NULL`.
+Delete behavior penting: `delivery_order_id` pada invoice `RESTRICT`, `customer_id` `RESTRICT`, `supplier_id` pada PO `RESTRICT`, item PO `CASCADE` bila PO dihapus, item receipt `CASCADE` bila receipt dihapus, `purchase_order_id` pada receipt `RESTRICT` (receipt = histori), `created_by` `SET NULL`.
 
 ---
 
@@ -211,6 +218,7 @@ Tiga pola berbeda hidup berdampingan — ini disengaja (warisan vs standar baru)
 | Payment | `PAY-20261029HHMMSS-123` | timestamp + random | idem |
 | Invoice | `932/SI/TTP/X/2026` | `Invoice::booted()` ambil `orderByDesc('id')->first()` lalu +1 | **rawan duplikasi** pada request bersamaan |
 | Purchase Order | `001/09/2026` | `document_sequences` + `lockForUpdate()` | concurrency-safe, urut per bulan |
+| Purchase Receipt | `001/09/2026` | `document_sequences` (`document_type = purchase_receipt`) + `lockForUpdate()` | periode dari `receipt_date`; nomor bisa sama dengan PO karena tipe dokumen berbeda |
 
 Nomor PO:
 
@@ -256,22 +264,54 @@ Harga PO adalah **excl. PPN**. `ppn_rate` disimpan sebagai snapshot agar histori
 
 Alokasi mingguan PO: `W1 = W2 = W3 = floor(qty/4)`, `W4 = sisa`. Jika user mengisi sendiri, total W1–W4 wajib sama dengan `qty_plan`.
 
+Aturan Purchase Receipt:
+
+```text
+remaining      = qty_plan - qty_received
+valid          = 0 < qty_received_now <= remaining      (divalidasi server)
+qty_ton        = qty_received_now × weight_kg / 1000    (snapshot weight_kg PO item, 4 desimal)
+status PO      = received bila semua item qty_received == qty_plan, selain itu partial
+stock IN       = qty_available += qty_received  (sekali per receipt, qty_reserved tetap)
+```
+
 ---
 
 ## 9. Otorisasi
 
 - Semua route selain `/login` dan `/register` berada di middleware `auth`.
-- Middleware `role` berasal dari Spatie Permission (registrasi alias di bootstrap aplikasi).
-- Modul PO dan Supplier: `role:admin`.
+- Middleware `role` dan `permission` berasal dari Spatie Permission (alias di `bootstrap/app.php`).
+- Modul Purchasing (SCM-09) memakai permission granular `<modul>.<aksi>`:
+
+  | Permission | Route |
+  | --- | --- |
+  | `suppliers.view` | `suppliers.index`, `suppliers.show` |
+  | `suppliers.create` | `suppliers.create`, `suppliers.store` |
+  | `suppliers.update` | `suppliers.edit`, `suppliers.update` |
+  | `suppliers.delete` | `suppliers.destroy` |
+  | `purchase-orders.view` | `purchase_orders.index`, `purchase_orders.show` |
+  | `purchase-orders.create` | `purchase_orders.create`, `purchase_orders.store` |
+  | `purchase-orders.update` | `purchase_orders.edit`, `purchase_orders.update` |
+  | `purchase-orders.confirm` | `purchase_orders.confirm` |
+  | `purchase-orders.cancel` | `purchase_orders.cancel` |
+  | `purchase-orders.print` | `purchase_orders.print` |
+  | `auto-po.view` | `purchase_orders.reorder` (GET) |
+  | `auto-po.create` | `purchase_orders.reorder.generate` (POST) |
+  | `purchase-receipts.view` | `purchase_receipts.index`, `purchase_receipts.show` |
+  | `purchase-receipts.create` | `purchase_receipts.create`, `purchase_receipts.store` |
+  | `purchase-receipts.process-stock-in` | `purchase_receipts.stock_in` |
+
+- Role mapping aktual: `admin` = 15 permission Purchasing (di-seed eksplisit + bypass `Gate::before`); `sales` dan `finance` = 0 permission. Tidak ada role baru.
+- Purchase Receipt (SCM-06)/(SCM-07) kini memakai `permission:purchase-receipts.*`; tidak ada lagi `role:admin` di route Purchasing.
 - AI Assistant: `role:admin|sales|finance` + `throttle:20,1` (dari `config/ai.php`).
-- Sidebar menyembunyikan menu berdasarkan `@role`, tetapi **penyembunyian menu bukan pengaman** — pengaman tetap middleware di route.
+- Sidebar Purchasing memakai `@canany`/`@can`, tombol aksi memakai `@can`; **penyembunyian menu bukan pengaman** — pengaman tetap middleware permission di route (403).
+- `Gate::before` membuat user role `admin` lolos semua permission, termasuk modul mendatang.
 
 Keterbatasan yang masih nyata:
 
 - Modul customer, produk, inventory, DO, shipment, invoice, payment, laporan, import, dan user management masih `auth` saja (belum ada pemisahan role per modul).
 - Registrasi publik terbuka; user baru langsung login.
 - `AuthController::login` tidak mengecek `users.is_active`, sehingga akun nonaktif tetap bisa masuk.
-- Belum ada Policy/permission granular (rencana P0b).
+- Permission granular baru diterapkan pada Purchasing; modul lain menyusul (rencana P0b).
 
 ---
 
@@ -301,21 +341,22 @@ Belum ada: audit log interaksi AI (`AiInteraction`), evaluation suite, agent loo
 
 ```text
 app/
-  Http/Controllers/     17 controller + base (thin)
-  Http/Requests/        FormRequest (PO, Supplier, AI)
-  Models/               17 model Eloquent
+  Http/Controllers/     18 controller + base (thin)
+  Http/Requests/        FormRequest (PO, Receipt, Supplier, AI)
+  Models/               19 model Eloquent
   Services/             DeliveryOrderService, InvoiceService, PaymentService,
-                        PurchaseOrderService, ReorderService, StockService
+                        PurchaseOrderService, ReorderService, PurchaseReceiptService,
+                        StockService
   Services/Ai/          AiAssistantService, AiContextBuilder
   Exports/ Imports/     Excel
 database/
-  migrations/           29 migration (urut waktu)
+  migrations/           31 migration (urut waktu)
   seeders/              role, admin, produk, supplier, dummy
 resources/views/
   layouts/app.blade.php layout tunggal
-  {customers,products,suppliers,purchase_orders,delivery_orders,
+  {customers,products,suppliers,purchase_orders,purchase_receipts,delivery_orders,
    shipments,invoices,payments,inventory,reports,imports,users,auth,dashboard}/
-tests/Feature/          9 file, 60 test
+tests/Feature/          13 file, 157 test
 routes/web.php          seluruh route web
 ```
 
@@ -325,10 +366,10 @@ routes/web.php          seluruh route web
 
 | Perintah | Hasil terakhir |
 | --- | --- |
-| `php artisan test --testsuite=Feature` | **60 passed**, 215 assertions |
+| `php artisan test --testsuite=Feature` | **157 passed**, 805 assertions |
 | `php artisan test` (polos) | gagal — `tests/Unit` tidak ada (pre-existing) |
 
-Cakupan test yang ada: `PaymentServiceTest`, `InvoiceServiceTest`, `InvoiceModelTest`, `DeliveryOrderServiceTest`, `AiChatEndpointTest`, `SupplierTest` (10), `ProductPurchasingTest` (10), `PurchaseOrderTest` (21), `ReorderTest` (28). Total Feature suite: 88 test / 281 assertion.
+Cakupan test yang ada: `PaymentServiceTest`, `InvoiceServiceTest`, `InvoiceModelTest`, `DeliveryOrderServiceTest`, `AiChatEndpointTest`, `SupplierTest` (11), `ProductPurchasingTest` (10), `PurchaseOrderTest` (25), `ReorderTest` (28), `PurchaseOrderPrintTest` (11), `PurchaseReceiptTest` (25), `PurchaseReceiptStockInTest` (15), `ScmEndToEndTest` (2), `PurchasingAccessControlTest` (11). Total Feature suite: 157 test / 805 assertion.
 
 Test memakai SQLite in-memory (`phpunit.xml`) dengan `RefreshDatabase`. **Jangan** mengarahkan test ke database MySQL dev — `RefreshDatabase` akan mengosongkannya.
 
@@ -338,9 +379,9 @@ Test memakai SQLite in-memory (`phpunit.xml`) dengan `RefreshDatabase`. **Jangan
 
 Urusan fungsional:
 
-1. **Belum ada penerimaan barang pembelian** (purchase receipt) dan **stock IN dari PO** — stok hanya bertambah lewat penyesuaian manual atau impor/dummy.
-2. **Belum ada reorder point / auto PO** (`qty_on_order` belum ada).
-3. **Belum ada cetak/PDF final PO** maupun pengiriman PO ke supplier (email/WhatsApp).
+1. ~~Belum ada penerimaan barang pembelian (purchase receipt)~~ — sudah ada di SCM-06 (`/purchase-receipts`); ~~stock IN dari PO belum~~ — sudah ada di SCM-07 (action **Process Stock IN** per receipt, `stock_movements.source_type = po_receipt`).
+2. ~~Belum ada reorder point / auto PO~~ — sudah ada di SCM-04 (`/purchase-orders/reorder`).
+3. **Belum ada ekspor PDF** dan pengiriman PO ke supplier (email/WhatsApp); print masih lewat browser (`window.print()`).
 4. **Invoice belum bisa dibuat otomatis dari shipment** — masih manual dari DO `shipped`.
 5. **Tidak ada audit trail perubahan data ERP** (hanya `stock_movements` dan `created_by`).
 
@@ -380,9 +421,11 @@ SCM-01  Supplier Master                    selesai
 SCM-02  Product Purchasing Data            selesai
 SCM-03  Purchase Order Foundation          selesai
 SCM-04  Auto PO / Reorder Point            selesai (rekomendasi + draft)
-SCM-05  Print / Confirm Order final        berikutnya (belum)
-SCM-06  Purchase Receipt                   belum
-SCM-07  Stock IN via StockService          belum
+SCM-05  Print / Confirm Order final        selesai (confirm + dokumen cetak)
+SCM-06  Purchase Receipt                   selesai (partial/full, tracking qty, tanpa stok)
+SCM-07  Stock IN via StockService          selesai (action eksplisit, idempoten per receipt)
+SCM-08  Testing & Hardening SCM            selesai (audit + 8 test tambahan, tanpa perubahan produksi)
+SCM-09  Purchasing UI & Access Control     selesai (15 permission granular, sidebar + tombol, 11 test)
 ```
 
 Rumus reorder yang dipakai SCM-04 (`app/Services/ReorderService.php`):
@@ -417,8 +460,8 @@ php artisan test --testsuite=Feature
 
 ## 17. Ringkasan satu paragraf
 
-Smart ERP TADCo adalah monolith Laravel server-rendered untuk distribusi barang: master customer/produk/supplier, persediaan berbasis `stock_balances` + kartu stok, alur penjualan DO → Shipment → Invoice → Payment dengan reservasi dan pemotongan stok yang dijaga transaksi, laporan Excel, serta fondasi pengadaan (supplier → data purchasing produk → PO draft/confirm → rekomendasi Auto PO) dengan penomoran concurrency-safe dan snapshot harga. Lapisan AI bersifat read-only, nonaktif secara default, dan dibatasi per role. Yang belum ada: penerimaan barang, stock IN dari pembelian, cetak PO final, dan audit trail menyeluruh.
+Smart ERP TADCo adalah monolith Laravel server-rendered untuk distribusi barang: master customer/produk/supplier, persediaan berbasis `stock_balances` + kartu stok, alur penjualan DO → Shipment → Invoice → Payment dengan reservasi dan pemotongan stok yang dijaga transaksi, laporan Excel, serta alur pengadaan end-to-end (supplier → data purchasing produk → PO draft/confirm → rekomendasi Auto PO → dokumen Confirm Order siap cetak → Purchase Receipt partial/full → Stock IN idempoten ke inventory existing) dengan penomoran concurrency-safe dan snapshot harga. Lapisan AI bersifat read-only, nonaktif secara default, dan dibatasi per role. Yang belum ada: ekspor PDF PO, pengiriman PO ke supplier, dan audit trail menyeluruh.
 
 ---
 
-*Dokumen ini menggambarkan kondisi kode per 29 Oktober 2026. Jika ada perubahan skema/alur, perbarui file ini bersamaan dengan catatan Obsidian terkait.*
+*Dokumen ini menggambarkan kondisi kode per 5 November 2026 (setelah SCM-09). Jika ada perubahan skema/alur, perbarui file ini bersamaan dengan catatan Obsidian terkait.*

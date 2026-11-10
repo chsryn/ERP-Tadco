@@ -5,6 +5,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\PurchaseOrderController;
+use App\Http\Controllers\PurchaseReceiptController;
 use App\Http\Controllers\ReorderController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\CustomerController;
@@ -29,15 +30,13 @@ Route::get('/', function () {
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login']);
-    Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
-    Route::post('/register', [AuthController::class, 'register']);
 });
 
 Route::middleware('auth')->group(function () {
     // Global search route
     Route::get('/search/global', [SearchController::class, 'global'])->name('search.global');
 
-    Route::resource('users', UserController::class);
+    Route::resource('users', UserController::class)->middleware('role:admin');
 
     // Dashboard route
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
@@ -54,27 +53,69 @@ Route::middleware('auth')->group(function () {
     Route::post('/customers/ajax', [App\Http\Controllers\CustomerController::class, 'storeAjax'])->name('customers.store_ajax');
     Route::resource('products', ProductController::class);
 
-    // Supplier (SCM inbound) — admin only
-    Route::resource('suppliers', SupplierController::class)->middleware('role:admin');
+    // Purchasing (SCM) — granular permission per operasi (SCM-09).
+    // Urutan resource dipisah per aksi; create/store harus didaftarkan sebelum {model} agar tidak tertangkap binding.
+    Route::resource('suppliers', SupplierController::class)->only(['create', 'store'])
+        ->middleware('permission:suppliers.create');
+    Route::resource('suppliers', SupplierController::class)->only(['index', 'show'])
+        ->middleware('permission:suppliers.view');
+    Route::resource('suppliers', SupplierController::class)->only(['edit', 'update'])
+        ->middleware('permission:suppliers.update');
+    Route::resource('suppliers', SupplierController::class)->only(['destroy'])
+        ->middleware('permission:suppliers.delete');
 
-    // Purchase Order (SCM inbound) — admin only
-    Route::middleware('role:admin')->group(function () {
-        // Auto PO / reorder harus didaftarkan sebelum resource agar tidak tertangkap {purchaseOrder}
-        Route::get('/purchase-orders/reorder', [ReorderController::class, 'index'])
-            ->name('purchase_orders.reorder');
-        Route::post('/purchase-orders/reorder', [ReorderController::class, 'generate'])
-            ->name('purchase_orders.reorder.generate');
+    // Auto PO / reorder harus didaftarkan sebelum resource agar tidak tertangkap {purchaseOrder}
+    Route::get('/purchase-orders/reorder', [ReorderController::class, 'index'])
+        ->middleware('permission:auto-po.view')
+        ->name('purchase_orders.reorder');
+    Route::post('/purchase-orders/reorder', [ReorderController::class, 'generate'])
+        ->middleware('permission:auto-po.create')
+        ->name('purchase_orders.reorder.generate');
 
-        Route::resource('purchase-orders', PurchaseOrderController::class)
-            ->except('destroy')
-            ->parameters(['purchase-orders' => 'purchaseOrder'])
-            ->names('purchase_orders');
+    Route::resource('purchase-orders', PurchaseOrderController::class)
+        ->only(['create', 'store'])
+        ->parameters(['purchase-orders' => 'purchaseOrder'])
+        ->names('purchase_orders')
+        ->middleware('permission:purchase-orders.create');
 
-        Route::post('/purchase-orders/{purchaseOrder}/confirm', [PurchaseOrderController::class, 'confirm'])
-            ->name('purchase_orders.confirm');
-        Route::post('/purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel'])
-            ->name('purchase_orders.cancel');
-    });
+    Route::resource('purchase-orders', PurchaseOrderController::class)
+        ->only(['index', 'show'])
+        ->parameters(['purchase-orders' => 'purchaseOrder'])
+        ->names('purchase_orders')
+        ->middleware('permission:purchase-orders.view');
+
+    Route::resource('purchase-orders', PurchaseOrderController::class)
+        ->only(['edit', 'update'])
+        ->parameters(['purchase-orders' => 'purchaseOrder'])
+        ->names('purchase_orders')
+        ->middleware('permission:purchase-orders.update');
+
+    Route::post('/purchase-orders/{purchaseOrder}/confirm', [PurchaseOrderController::class, 'confirm'])
+        ->middleware('permission:purchase-orders.confirm')
+        ->name('purchase_orders.confirm');
+    Route::get('/purchase-orders/{purchaseOrder}/print', [PurchaseOrderController::class, 'printOrder'])
+        ->middleware('permission:purchase-orders.print')
+        ->name('purchase_orders.print');
+    Route::post('/purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel'])
+        ->middleware('permission:purchase-orders.cancel')
+        ->name('purchase_orders.cancel');
+
+    // Purchase Receipt (SCM-06) — catat penerimaan, Stock IN terpisah (SCM-07)
+    Route::get('/purchase-receipts', [PurchaseReceiptController::class, 'index'])
+        ->middleware('permission:purchase-receipts.view')
+        ->name('purchase_receipts.index');
+    Route::get('/purchase-receipts/create/{purchaseOrder}', [PurchaseReceiptController::class, 'create'])
+        ->middleware('permission:purchase-receipts.create')
+        ->name('purchase_receipts.create');
+    Route::post('/purchase-receipts/{purchaseOrder}', [PurchaseReceiptController::class, 'store'])
+        ->middleware('permission:purchase-receipts.create')
+        ->name('purchase_receipts.store');
+    Route::post('/purchase-receipts/{purchaseReceipt}/stock-in', [PurchaseReceiptController::class, 'processStockIn'])
+        ->middleware('permission:purchase-receipts.process-stock-in')
+        ->name('purchase_receipts.stock_in');
+    Route::get('/purchase-receipts/{purchaseReceipt}', [PurchaseReceiptController::class, 'show'])
+        ->middleware('permission:purchase-receipts.view')
+        ->name('purchase_receipts.show');
 
     // Import routes
     Route::get('/imports', [ImportController::class, 'index'])->name('imports.index');

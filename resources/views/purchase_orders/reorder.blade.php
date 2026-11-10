@@ -166,9 +166,11 @@
                     Dipilih: <strong id="selected_count">0</strong> produk ·
                     Total qty: <strong id="selected_qty">0</strong>
                 </div>
-                <button type="submit" class="btn btn-primary px-4 rounded-pill fw-semibold shadow-sm" id="generate_button">
-                    <i class="bi bi-magic me-1"></i> Generate Draft PO
-                </button>
+                @can('auto-po.create')
+                    <button type="submit" class="btn btn-primary px-4 rounded-pill fw-semibold shadow-sm" id="generate_button">
+                        <i class="bi bi-magic me-1"></i> Generate Draft PO
+                    </button>
+                @endcan
             </div>
         @endif
     </div>

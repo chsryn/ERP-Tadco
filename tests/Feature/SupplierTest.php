@@ -120,6 +120,18 @@ class SupplierTest extends TestCase
         ]);
     }
 
+    public function test_duplicate_code_is_rejected_on_update(): void
+    {
+        Supplier::create($this->payload(['code' => 'SUP-SATU']));
+        $supplier = Supplier::create($this->payload(['code' => 'SUP-DUA']));
+
+        $this->actingAs($this->userWithRole('admin'))
+            ->put(route('suppliers.update', $supplier), $this->payload(['code' => 'SUP-SATU']))
+            ->assertSessionHasErrors('code');
+
+        $this->assertDatabaseHas('suppliers', ['id' => $supplier->id, 'code' => 'SUP-DUA']);
+    }
+
     public function test_admin_can_deactivate_supplier(): void
     {
         $supplier = Supplier::create($this->payload(['is_active' => '1']));

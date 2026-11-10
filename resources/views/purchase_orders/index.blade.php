@@ -6,12 +6,21 @@
 
 @section('page_action')
 <div class="d-flex gap-2">
-    <a href="{{ route('purchase_orders.reorder') }}" class="btn btn-outline-primary px-3 rounded-pill fw-semibold">
-        <i class="bi bi-arrow-repeat me-1"></i> Auto PO
-    </a>
-    <a href="{{ route('purchase_orders.create') }}" class="btn btn-primary px-4 rounded-pill fw-semibold shadow-sm">
-        <i class="bi bi-plus-lg me-1"></i> Buat PO
-    </a>
+    @can('purchase-receipts.view')
+        <a href="{{ route('purchase_receipts.index') }}" class="btn btn-outline-success px-3 rounded-pill fw-semibold">
+            <i class="bi bi-box-arrow-in-down me-1"></i> Receipt
+        </a>
+    @endcan
+    @can('auto-po.view')
+        <a href="{{ route('purchase_orders.reorder') }}" class="btn btn-outline-primary px-3 rounded-pill fw-semibold">
+            <i class="bi bi-arrow-repeat me-1"></i> Auto PO
+        </a>
+    @endcan
+    @can('purchase-orders.create')
+        <a href="{{ route('purchase_orders.create') }}" class="btn btn-primary px-4 rounded-pill fw-semibold shadow-sm">
+            <i class="bi bi-plus-lg me-1"></i> Buat PO
+        </a>
+    @endcan
 </div>
 @endsection
 
@@ -106,17 +115,23 @@
                             <div class="d-flex justify-content-center gap-2">
                                 <a href="{{ route('purchase_orders.show', $purchaseOrder) }}" class="btn btn-sm btn-light border text-info rounded d-inline-flex align-items-center justify-content-center shadow-sm" style="width: 32px; height: 32px;" title="Detail"><i class="bi bi-eye"></i></a>
                                 @if($purchaseOrder->status === 'draft')
-                                    <a href="{{ route('purchase_orders.edit', $purchaseOrder) }}" class="btn btn-sm btn-light border text-warning rounded d-inline-flex align-items-center justify-content-center shadow-sm" style="width: 32px; height: 32px;" title="Edit"><i class="bi bi-pencil"></i></a>
-                                    <form action="{{ route('purchase_orders.confirm', $purchaseOrder) }}" method="POST" onsubmit="return confirm('Konfirmasi PO ini? Draft tidak dapat diedit setelah dikonfirmasi.')" class="d-inline">
-                                        @csrf
-                                        <button type="submit" class="btn btn-sm btn-light border text-success rounded d-inline-flex align-items-center justify-content-center shadow-sm" style="width: 32px; height: 32px;" title="Konfirmasi"><i class="bi bi-check2-circle"></i></button>
-                                    </form>
+                                    @can('purchase-orders.update')
+                                        <a href="{{ route('purchase_orders.edit', $purchaseOrder) }}" class="btn btn-sm btn-light border text-warning rounded d-inline-flex align-items-center justify-content-center shadow-sm" style="width: 32px; height: 32px;" title="Edit"><i class="bi bi-pencil"></i></a>
+                                    @endcan
+                                    @can('purchase-orders.confirm')
+                                        <form action="{{ route('purchase_orders.confirm', $purchaseOrder) }}" method="POST" onsubmit="return confirm('Konfirmasi PO ini? Draft tidak dapat diedit setelah dikonfirmasi.')" class="d-inline">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-light border text-success rounded d-inline-flex align-items-center justify-content-center shadow-sm" style="width: 32px; height: 32px;" title="Konfirmasi"><i class="bi bi-check2-circle"></i></button>
+                                        </form>
+                                    @endcan
                                 @endif
                                 @if(in_array($purchaseOrder->status, ['draft', 'confirmed'], true))
-                                    <form action="{{ route('purchase_orders.cancel', $purchaseOrder) }}" method="POST" onsubmit="return confirm('Batalkan PO ini?')" class="d-inline">
-                                        @csrf
-                                        <button type="submit" class="btn btn-sm btn-light border text-danger rounded d-inline-flex align-items-center justify-content-center shadow-sm" style="width: 32px; height: 32px;" title="Batalkan"><i class="bi bi-x-circle"></i></button>
-                                    </form>
+                                    @can('purchase-orders.cancel')
+                                        <form action="{{ route('purchase_orders.cancel', $purchaseOrder) }}" method="POST" onsubmit="return confirm('Batalkan PO ini?')" class="d-inline">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-light border text-danger rounded d-inline-flex align-items-center justify-content-center shadow-sm" style="width: 32px; height: 32px;" title="Batalkan"><i class="bi bi-x-circle"></i></button>
+                                        </form>
+                                    @endcan
                                 @endif
                             </div>
                         </td>

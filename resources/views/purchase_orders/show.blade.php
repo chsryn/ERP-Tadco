@@ -56,23 +56,42 @@
     </div>
     <div class="d-flex gap-2">
         @if($purchaseOrder->status === 'draft')
-            <a href="{{ route('purchase_orders.edit', $purchaseOrder) }}" class="btn btn-warning btn-sm px-3 rounded-pill text-dark fw-semibold">
-                <i class="bi bi-pencil me-1"></i> Edit Draft
-            </a>
-            <form action="{{ route('purchase_orders.confirm', $purchaseOrder) }}" method="POST" onsubmit="return confirm('Konfirmasi PO ini? Draft tidak dapat diedit setelah dikonfirmasi.')">
-                @csrf
-                <button type="submit" class="btn btn-success btn-sm px-3 rounded-pill fw-semibold">
-                    <i class="bi bi-check2-circle me-1"></i> Konfirmasi PO
-                </button>
-            </form>
+            @can('purchase-orders.update')
+                <a href="{{ route('purchase_orders.edit', $purchaseOrder) }}" class="btn btn-warning btn-sm px-3 rounded-pill text-dark fw-semibold">
+                    <i class="bi bi-pencil me-1"></i> Edit Draft
+                </a>
+            @endcan
+            @can('purchase-orders.confirm')
+                <form action="{{ route('purchase_orders.confirm', $purchaseOrder) }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin mengonfirmasi Purchase Order ini?\n\nSetelah dikonfirmasi, data PO tidak dapat diedit.')">
+                    @csrf
+                    <button type="submit" class="btn btn-success btn-sm px-3 rounded-pill fw-semibold">
+                        <i class="bi bi-check2-circle me-1"></i> Confirm Order
+                    </button>
+                </form>
+            @endcan
+        @elseif(in_array($purchaseOrder->status, ['confirmed', 'partial', 'received'], true))
+            @can('purchase-orders.print')
+                <a href="{{ route('purchase_orders.print', $purchaseOrder) }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm px-3 rounded-pill fw-semibold">
+                    <i class="bi bi-printer me-1"></i> Print Confirm Order
+                </a>
+            @endcan
+        @endif
+        @if(in_array($purchaseOrder->status, ['confirmed', 'partial'], true))
+            @can('purchase-receipts.create')
+                <a href="{{ route('purchase_receipts.create', $purchaseOrder) }}" class="btn btn-success btn-sm px-3 rounded-pill fw-semibold">
+                    <i class="bi bi-box-arrow-in-down me-1"></i> Receive Goods
+                </a>
+            @endcan
         @endif
         @if(in_array($purchaseOrder->status, ['draft', 'confirmed'], true))
-            <form action="{{ route('purchase_orders.cancel', $purchaseOrder) }}" method="POST" onsubmit="return confirm('Batalkan PO ini?')">
-                @csrf
-                <button type="submit" class="btn btn-outline-danger btn-sm px-3 rounded-pill">
-                    <i class="bi bi-x-circle me-1"></i> Batalkan
-                </button>
-            </form>
+            @can('purchase-orders.cancel')
+                <form action="{{ route('purchase_orders.cancel', $purchaseOrder) }}" method="POST" onsubmit="return confirm('Batalkan PO ini?')">
+                    @csrf
+                    <button type="submit" class="btn btn-outline-danger btn-sm px-3 rounded-pill">
+                        <i class="bi bi-x-circle me-1"></i> Batalkan
+                    </button>
+                </form>
+            @endcan
         @endif
     </div>
 </div>

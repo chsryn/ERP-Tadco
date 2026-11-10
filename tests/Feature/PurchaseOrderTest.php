@@ -405,6 +405,96 @@ class PurchaseOrderTest extends TestCase
             ->assertOk();
     }
 
+    public function test_po_uses_purchase_price_not_base_price_when_price_is_empty(): void
+    {
+        $this->actingAs($this->userWithRole());
+
+        $product = $this->product([
+            'purchase_price' => 100000,
+            'base_price' => 150000,
+        ]);
+
+        $this->post(route('purchase_orders.store'), $this->payload($this->supplier(), [
+            $this->itemPayload($product, ['qty_plan' => 10, 'price' => '', 'special_discount' => 0]),
+        ]))->assertSessionHasNoErrors();
+
+        $po = PurchaseOrder::firstOrFail();
+        $item = $po->items->first();
+
+        $this->assertSame(100000.0, (float) $item->price);
+        $this->assertSame(1000000.0, (float) $item->total_price);
+        $this->assertSame(1110000.0, (float) $po->grand_total);
+    }
+
+    public function test_custom_weekly_allocation_is_accepted_when_total_matches(): void
+    {
+        $this->actingAs($this->userWithRole())
+            ->post(route('purchase_orders.store'), $this->payload($this->supplier(), [
+                $this->itemPayload($this->product(), [
+                    'qty_plan' => 100,
+                    'week_1' => 10,
+                    'week_2' => 20,
+                    'week_3' => 30,
+                    'week_4' => 40,
+                ]),
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $item = PurchaseOrder::firstOrFail()->items->first();
+
+        $this->assertSame(10.0, (float) $item->week_1);
+        $this->assertSame(20.0, (float) $item->week_2);
+        $this->assertSame(30.0, (float) $item->week_3);
+        $this->assertSame(40.0, (float) $item->week_4);
+    }
+
+    public function test_confirm_rejects_supplier_deactivated_after_draft_is_created(): void
+    {
+        $this->actingAs($this->userWithRole());
+
+        $supplier = $this->supplier();
+        $this->post(route('purchase_orders.store'), $this->payload($supplier, [$this->itemPayload($this->product())]))
+            ->assertSessionHasNoErrors();
+
+        $po = PurchaseOrder::firstOrFail();
+        $supplier->update(['is_active' => false]);
+
+        $this->post(route('purchase_orders.confirm', $po))->assertSessionHasErrors('supplier_id');
+
+        $this->assertSame('draft', $po->fresh()->status);
+    }
+
+    public function test_partial_and_received_order_cannot_be_cancelled(): void
+    {
+        $this->actingAs($this->userWithRole());
+
+        $this->post(route('purchase_orders.store'), $this->payload($this->supplier(), [
+            $this->itemPayload($this->product(), ['qty_plan' => 100]),
+        ]))->assertSessionHasNoErrors();
+
+        $po = PurchaseOrder::firstOrFail();
+        $item = $po->items->first();
+        $this->post(route('purchase_orders.confirm', $po))->assertSessionHasNoErrors();
+
+        $this->post(route('purchase_receipts.store', $po), [
+            'receipt_date' => '2026-09-10',
+            'items' => [$item->id => 40],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame('partial', $po->fresh()->status);
+        $this->post(route('purchase_orders.cancel', $po))->assertSessionHasErrors('status');
+        $this->assertSame('partial', $po->fresh()->status);
+
+        $this->post(route('purchase_receipts.store', $po), [
+            'receipt_date' => '2026-09-11',
+            'items' => [$item->id => 60],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame('received', $po->fresh()->status);
+        $this->post(route('purchase_orders.cancel', $po))->assertSessionHasErrors('status');
+        $this->assertSame('received', $po->fresh()->status);
+    }
+
     public function test_admin_can_open_create_and_show_pages(): void
     {
         $this->actingAs($this->userWithRole());

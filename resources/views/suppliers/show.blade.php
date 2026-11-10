@@ -13,9 +13,11 @@
                 <p class="text-muted small mb-0">Kode Supplier: <span class="badge bg-secondary">{{ $supplier->code }}</span></p>
             </div>
             <div class="d-flex gap-2">
-                <a href="{{ route('suppliers.edit', $supplier) }}" class="btn btn-warning btn-sm px-3 rounded-pill text-dark fw-semibold">
-                    <i class="bi bi-pencil me-1"></i> Edit Supplier
-                </a>
+                @can('suppliers.update')
+                    <a href="{{ route('suppliers.edit', $supplier) }}" class="btn btn-warning btn-sm px-3 rounded-pill text-dark fw-semibold">
+                        <i class="bi bi-pencil me-1"></i> Edit Supplier
+                    </a>
+                @endcan
                 <a href="{{ route('suppliers.index') }}" class="btn btn-outline-secondary btn-sm px-3 rounded-pill">
                     <i class="bi bi-arrow-left me-1"></i> Kembali
                 </a>

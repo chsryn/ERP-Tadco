@@ -193,12 +193,12 @@ class PurchaseOrderService
      * lockForUpdate men-serialisasi increment, unique(document_type, period) jadi pengaman terakhir.
      * Wajib dipanggil di dalam DB transaction.
      */
-    public function nextNumber(string $period): string
+    public function nextNumber(string $period, string $documentType = self::SEQUENCE_TYPE): string
     {
         $now = now();
 
         DB::table('document_sequences')->insertOrIgnore([
-            'document_type' => self::SEQUENCE_TYPE,
+            'document_type' => $documentType,
             'period' => $period,
             'last_number' => 0,
             'created_at' => $now,
@@ -206,7 +206,7 @@ class PurchaseOrderService
         ]);
 
         $sequence = DB::table('document_sequences')
-            ->where('document_type', self::SEQUENCE_TYPE)
+            ->where('document_type', $documentType)
             ->where('period', $period)
             ->lockForUpdate()
             ->first();

@@ -1081,6 +1081,51 @@
                     <span>Dashboard</span>
                 </a>
 
+                @canany(['suppliers.view', 'purchase-orders.view', 'auto-po.view', 'purchase-receipts.view'])
+                    <div class="sidebar-group">
+                        <button type="button"
+                            class="sidebar-group-toggle {{ request()->routeIs('suppliers.*') || request()->routeIs('purchase_orders.*') || request()->routeIs('purchase_receipts.*') ? 'active' : '' }}"
+                            data-group="purchasing-group">
+                            <span>
+                                <i class="bi bi-bag-check-fill"></i>
+                                <span>Purchasing</span>
+                            </span>
+                            <i class="bi bi-chevron-down"></i>
+                        </button>
+                        <div class="sidebar-submenu {{ request()->routeIs('suppliers.*') || request()->routeIs('purchase_orders.*') || request()->routeIs('purchase_receipts.*') ? 'open' : '' }}"
+                            id="purchasing-group">
+                            @can('suppliers.view')
+                                <a href="{{ route('suppliers.index') }}"
+                                    class="sidebar-link {{ request()->routeIs('suppliers.*') ? 'active' : '' }}">
+                                    <i class="bi bi-truck"></i>
+                                    <span>Suppliers</span>
+                                </a>
+                            @endcan
+                            @can('purchase-orders.view')
+                                <a href="{{ route('purchase_orders.index') }}"
+                                    class="sidebar-link {{ request()->routeIs('purchase_orders.index') || request()->routeIs('purchase_orders.show') || request()->routeIs('purchase_orders.create') || request()->routeIs('purchase_orders.edit') || request()->routeIs('purchase_orders.print') ? 'active' : '' }}">
+                                    <i class="bi bi-file-earmark-text"></i>
+                                    <span>Purchase Orders</span>
+                                </a>
+                            @endcan
+                            @can('auto-po.view')
+                                <a href="{{ route('purchase_orders.reorder') }}"
+                                    class="sidebar-link {{ request()->routeIs('purchase_orders.reorder') ? 'active' : '' }}">
+                                    <i class="bi bi-arrow-repeat"></i>
+                                    <span>Auto PO / Reorder</span>
+                                </a>
+                            @endcan
+                            @can('purchase-receipts.view')
+                                <a href="{{ route('purchase_receipts.index') }}"
+                                    class="sidebar-link {{ request()->routeIs('purchase_receipts.*') ? 'active' : '' }}">
+                                    <i class="bi bi-box-arrow-in-down"></i>
+                                    <span>Purchase Receipts</span>
+                                </a>
+                            @endcan
+                        </div>
+                    </div>
+                @endcanany
+
                 @role('admin|sales')
                     <div class="sidebar-group">
                         <button type="button"

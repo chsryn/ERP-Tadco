@@ -109,6 +109,22 @@ class PurchaseOrderController extends Controller
             ->with('success', 'Purchase Order berhasil dikonfirmasi.');
     }
 
+    /**
+     * Dokumen Confirm Order. Hanya PO yang sudah dikonfirmasi (bukan draft/cancelled).
+     */
+    public function printOrder(PurchaseOrder $purchaseOrder)
+    {
+        abort_unless(
+            in_array($purchaseOrder->status, ['confirmed', 'partial', 'received'], true),
+            403,
+            'Confirm Order baru dapat dicetak setelah PO dikonfirmasi.'
+        );
+
+        $purchaseOrder->load(['supplier', 'items.product']);
+
+        return view('purchase_orders.print', compact('purchaseOrder'));
+    }
+
     public function cancel(PurchaseOrder $purchaseOrder)
     {
         try {

@@ -5,9 +5,11 @@
 @section('page_subtitle', 'Data supplier / principal untuk pengadaan barang')
 
 @section('page_action')
+@can('suppliers.create')
 <a href="{{ route('suppliers.create') }}" class="btn btn-primary px-4 rounded-pill fw-semibold shadow-sm">
     <i class="bi bi-plus-lg me-1"></i> Tambah Supplier
 </a>
+@endcan
 @endsection
 
 @section('content')
@@ -96,12 +98,16 @@
                         <td class="text-center text-nowrap">
                             <div class="d-flex justify-content-center gap-2">
                                 <a href="{{ route('suppliers.show', $supplier) }}" class="btn btn-sm btn-light border text-info rounded d-inline-flex align-items-center justify-content-center shadow-sm" style="width: 32px; height: 32px;" title="Detail"><i class="bi bi-eye"></i></a>
-                                <a href="{{ route('suppliers.edit', $supplier) }}" class="btn btn-sm btn-light border text-warning rounded d-inline-flex align-items-center justify-content-center shadow-sm" style="width: 32px; height: 32px;" title="Edit"><i class="bi bi-pencil"></i></a>
-                                <form action="{{ route('suppliers.destroy', $supplier) }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin menghapus supplier ini?')" class="d-inline">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="btn btn-sm btn-light border text-danger rounded d-inline-flex align-items-center justify-content-center shadow-sm" style="width: 32px; height: 32px;" title="Hapus"><i class="bi bi-trash"></i></button>
-                                </form>
+                                @can('suppliers.update')
+                                    <a href="{{ route('suppliers.edit', $supplier) }}" class="btn btn-sm btn-light border text-warning rounded d-inline-flex align-items-center justify-content-center shadow-sm" style="width: 32px; height: 32px;" title="Edit"><i class="bi bi-pencil"></i></a>
+                                @endcan
+                                @can('suppliers.delete')
+                                    <form action="{{ route('suppliers.destroy', $supplier) }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin menghapus supplier ini?')" class="d-inline">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-light border text-danger rounded d-inline-flex align-items-center justify-content-center shadow-sm" style="width: 32px; height: 32px;" title="Hapus"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                @endcan
                             </div>
                         </td>
                     </tr>
