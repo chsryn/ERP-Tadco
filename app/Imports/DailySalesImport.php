@@ -24,7 +24,7 @@ class DailySalesImport implements ToCollection, WithStartRow, SkipsEmptyRows
         return 7;
     }
 
-    public function collection(Collection $rows)
+    public function collection(Collection $rows): void
     {
         // Gunakan Database Transaction agar aman jika terjadi error di tengah jalan
         DB::transaction(function () use ($rows) {
@@ -201,7 +201,7 @@ class DailySalesImport implements ToCollection, WithStartRow, SkipsEmptyRows
     {
         if (empty($value)) return null;
         if (is_numeric($value)) {
-            return Date::excelToDateTimeObject($value)->format('Y-m-d');
+            return Date::excelToDateTimeObject((float) $value)->format('Y-m-d');
         }
         return date('Y-m-d', strtotime($value));
     }

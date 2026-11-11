@@ -16,7 +16,7 @@ class StockImport implements ToCollection, WithStartRow, SkipsEmptyRows
         return 7;
     }
 
-    public function collection(Collection $rows)
+    public function collection(Collection $rows): void
     {
         foreach ($rows as $row) {
             $productCode = trim($row[1] ?? '');

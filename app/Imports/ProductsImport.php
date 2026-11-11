@@ -16,7 +16,7 @@ class ProductsImport implements ToCollection, WithStartRow, SkipsEmptyRows
         return 3;
     }
 
-    public function collection(Collection $rows)
+    public function collection(Collection $rows): void
     {
         foreach ($rows as $row) {
             $uom = trim($row[0] ?? '');

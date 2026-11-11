@@ -15,7 +15,7 @@ class CustomersImport implements ToCollection, WithStartRow, SkipsEmptyRows
         return 2;
     }
 
-    public function collection(Collection $rows)
+    public function collection(Collection $rows): void
     {
         foreach ($rows as $row) {
             $customerName = trim($row[1] ?? '');

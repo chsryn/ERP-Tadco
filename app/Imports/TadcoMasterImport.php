@@ -1,9 +1,10 @@
 <?php
 namespace App\Imports;
 
+use Maatwebsite\Excel\Concerns\Import;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
-class TadcoMasterImport implements WithMultipleSheets
+class TadcoMasterImport implements WithMultipleSheets, Import
 {
     public function sheets(): array
     {
