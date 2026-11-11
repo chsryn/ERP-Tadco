@@ -24,18 +24,13 @@ class StockReportExport implements FromCollection, WithHeadings, WithMapping, Sh
         $lowStockOnly = $this->filters['low_stock_only'] ?? null;
 
         $query = StockBalance::query()
-            ->with(['product', 'warehouse']);
+            ->with(['product']);
 
         if ($search) {
-            $query->where(function ($q) use ($search) {
-                $q->whereHas('product', function ($productQuery) use ($search) {
-                    $productQuery->where('product_code', 'like', "%{$search}%")
-                        ->orWhere('product_name', 'like', "%{$search}%")
-                        ->orWhere('segment', 'like', "%{$search}%");
-                })->orWhereHas('warehouse', function ($warehouseQuery) use ($search) {
-                    $warehouseQuery->where('warehouse_name', 'like', "%{$search}%")
-                        ->orWhere('warehouse_code', 'like', "%{$search}%");
-                });
+            $query->whereHas('product', function ($productQuery) use ($search) {
+                $productQuery->where('product_code', 'like', "%{$search}%")
+                    ->orWhere('product_name', 'like', "%{$search}%")
+                    ->orWhere('segment', 'like', "%{$search}%");
             });
         }
 
@@ -54,7 +49,6 @@ class StockReportExport implements FromCollection, WithHeadings, WithMapping, Sh
             'Kode Produk',
             'Nama Produk',
             'Segment',
-            'Gudang',
             'Qty Available',
             'Qty Reserved',
             'Qty Bisa Dipakai',
@@ -69,7 +63,6 @@ class StockReportExport implements FromCollection, WithHeadings, WithMapping, Sh
             $stock->product->product_code ?? '-',
             $stock->product->product_name ?? '-',
             $stock->product->segment ?? '-',
-            $stock->warehouse->warehouse_name ?? '-',
             (float) $stock->qty_available,
             (float) $stock->qty_reserved,
             $usableStock,

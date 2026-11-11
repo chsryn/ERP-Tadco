@@ -148,9 +148,9 @@
                         <tbody>
                             @forelse($invoice->items as $item)
                                 @php
-                                    $discPercent = (float) ($item->discount_percentage ?? ($item->discount_rate ? $item->discount_rate * 100 : 0));
-                                    $basePrice = (float) ($item->base_price ?? $item->unit_price);
-                                    $finalPrice = (float) ($item->final_price ?? $item->unit_price);
+                                    $discPercent = (float) $item->discount_percentage;
+                                    $basePrice = (float) $item->base_price;
+                                    $finalPrice = (float) $item->final_price;
                                 @endphp
                                 <tr>
                                     <td class="fw-semibold text-dark">{{ $item->product->product_name ?? '-' }}</td>

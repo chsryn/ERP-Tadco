@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Validation\ValidationException;
 
 class Product extends Model
 {
@@ -37,9 +38,37 @@ class Product extends Model
         return $this->hasMany(ProductDiscount::class);
     }
 
-    public function prices()
+    /**
+     * Cari baris product_discounts yang berlaku untuk qty tertentu.
+     *
+     * Aturan ini sama dengan yang dipakai DeliveryOrderService: min_qty <= qty
+     * <= max_qty (max_qty null = tanpa batas atas). Pemilihan tidak bergantung
+     * pada urutan database. Jika lebih dari satu strata cocok, data master
+     * dianggap tidak valid dan transaksi harus ditolak (tidak memilih acak).
+     *
+     * @throws ValidationException
+     */
+    public function discountForQty(float $qty): ?ProductDiscount
     {
-        return $this->hasMany(ProductPrice::class);
+        $matches = $this->discounts
+            ->filter(function (ProductDiscount $discount) use ($qty) {
+                $minQty = (float) $discount->min_qty;
+                $maxQty = $discount->max_qty === null ? null : (float) $discount->max_qty;
+
+                return $qty >= $minQty && ($maxQty === null || $qty <= $maxQty);
+            })
+            ->values();
+
+        if ($matches->count() > 1) {
+            $levels = $matches->pluck('strata_level')->implode(', ');
+
+            throw ValidationException::withMessages([
+                'discount' => "Produk {$this->product_code} - {$this->product_name} memiliki lebih dari satu strata diskon "
+                    . "yang cocok untuk qty {$qty} ({$levels}). Perbaiki rentang min_qty/max_qty agar tidak tumpang tindih.",
+            ]);
+        }
+
+        return $matches->first();
     }
 
     public function stockBalances()

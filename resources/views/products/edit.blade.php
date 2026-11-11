@@ -177,7 +177,7 @@
                                         <td>
                                             <input
                                                 type="number"
-                                                step="0.0001"
+                                                step="1"
                                                 min="0"
                                                 name="discounts[{{ $tier }}][min_qty]"
                                                 class="form-control"
@@ -188,7 +188,7 @@
                                         <td>
                                             <input
                                                 type="number"
-                                                step="0.0001"
+                                                step="1"
                                                 min="0"
                                                 name="discounts[{{ $tier }}][max_qty]"
                                                 class="form-control"

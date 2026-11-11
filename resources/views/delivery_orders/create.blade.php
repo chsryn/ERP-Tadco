@@ -153,7 +153,7 @@
                                         </td>
                                         <td>
                                             <!-- Input Qty akan menjadi trigger perhitungan -->
-                                            <input type="number" name="qty[]" class="form-control text-center qty-input input-qty" style="width: 90px; min-width: 90px;" min="1" value="{{ old("qty.$i", 1) }}" required>
+                                            <input type="number" name="qty[]" class="form-control text-center qty-input input-qty" style="width: 90px; min-width: 90px;" min="1" step="1" value="{{ old("qty.$i", 1) }}" required>
                                         </td>
                                         <td>
                                             <!-- Tampilan Text & Input Hidden -->

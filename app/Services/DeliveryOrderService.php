@@ -28,7 +28,85 @@ class DeliveryOrderService
             ]);
         }
 
-        return DB::transaction(function () use ($validatedData, $items, $salesId) {
+        // Validasi seluruh item sebelum ada data yang ditulis. Ini mencegah DO,
+        // item, atau reservasi stok parsial saat produk belum punya harga valid.
+        $preparedItems = [];
+
+        foreach ($items as $item) {
+            $product = Product::query()
+                ->with('discounts')
+                ->find($item['product_id'] ?? null);
+
+            if (!$product) {
+                throw ValidationException::withMessages([
+                    'product_id' => 'Produk pada Delivery Order tidak ditemukan.',
+                ]);
+            }
+
+            $productLabel = "{$product->product_code} - {$product->product_name}";
+
+            if (!$product->is_active) {
+                throw ValidationException::withMessages([
+                    'product_id' => "Produk {$productLabel} tidak aktif dan tidak bisa dipakai untuk transaksi.",
+                ]);
+            }
+
+            $rawQty = $item['qty'] ?? null;
+            if (!is_numeric($rawQty)) {
+                throw ValidationException::withMessages([
+                    'qty' => "Qty untuk produk {$productLabel} wajib berupa angka.",
+                ]);
+            }
+
+            $numericQty = (float) $rawQty;
+            if ($numericQty <= 0 || floor($numericQty) !== $numericQty) {
+                throw ValidationException::withMessages([
+                    'qty' => "Qty untuk produk {$productLabel} harus bilangan bulat lebih dari 0. "
+                        . 'Qty desimal tidak didukung karena kolom qty DO/invoice bertipe integer.',
+                ]);
+            }
+
+            $qty = (int) $numericQty;
+
+            $basePrice = (float) $product->base_price;
+            if ($basePrice <= 0) {
+                throw ValidationException::withMessages([
+                    'price' => "Produk {$productLabel} belum memiliki harga dasar (base_price) yang valid. "
+                        . 'Lengkapi harga produk terlebih dahulu sebelum membuat transaksi.',
+                ]);
+            }
+
+            $matchedDiscount = $product->discountForQty($qty);
+            $discountPercentage = $matchedDiscount
+                ? (float) $matchedDiscount->discount_percentage
+                : 0.0;
+
+            if ($discountPercentage < 0 || $discountPercentage > 100) {
+                throw ValidationException::withMessages([
+                    'discount' => "Diskon produk {$productLabel} untuk qty {$qty} tidak valid "
+                        . "({$discountPercentage}%). Diskon harus berada di antara 0 dan 100.",
+                ]);
+            }
+
+            $finalPrice = round($basePrice * (1 - ($discountPercentage / 100)), 2);
+            if ($finalPrice <= 0) {
+                throw ValidationException::withMessages([
+                    'price' => "Harga bersih produk {$productLabel} untuk qty {$qty} adalah 0. "
+                        . 'Transaksi dengan harga nol tidak diizinkan.',
+                ]);
+            }
+
+            $preparedItems[] = [
+                'product' => $product,
+                'qty' => $qty,
+                'base_price' => $basePrice,
+                'discount_percentage' => $discountPercentage,
+                'final_price' => $finalPrice,
+                'line_total' => round($qty * $finalPrice, 2),
+            ];
+        }
+
+        return DB::transaction(function () use ($validatedData, $preparedItems, $salesId) {
             $totalAmount = 0;
 
             $deliveryOrder = DeliveryOrder::query()->create([
@@ -42,64 +120,49 @@ class DeliveryOrderService
                 'notes' => $validatedData['notes'] ?? null,
             ]);
 
-            foreach ($items as $item) {
+            foreach ($preparedItems as $item) {
+                /** @var Product $product */
+                $product = $item['product'];
+
                 /** @var StockBalance|null $stockBalance */
                 $stockBalance = StockBalance::query()
-                    ->where('product_id', '=', $item['product_id'])
+                    ->where('product_id', '=', $product->id)
                     ->lockForUpdate()
                     ->first();
 
                 if (!$stockBalance) {
                     $stockBalance = StockBalance::create([
-                        'product_id' => $item['product_id'],
+                        'product_id' => $product->id,
                         'qty_available' => 0,
                         'qty_reserved' => 0,
                     ]);
                 }
 
-                $product = Product::query()->find($item['product_id']);
-
-                $qty = (float) $item['qty'];
+                $qty = $item['qty'];
                 $availableStock = (float) $stockBalance->qty_available - (float) $stockBalance->qty_reserved;
 
                 if ($availableStock < $qty) {
                     $availFormatted = number_format(max(0, $availableStock), 2, ',', '.');
-                    $requestedFormatted = number_format($qty, 2, ',', '.');
-                    $productName = $product->product_name ?? 'Produk';
+                    $requestedFormatted = number_format($qty, 0, ',', '.');
                     throw ValidationException::withMessages([
-                        'qty' => "Stok {$productName} tidak mencukupi. Stok tersedia: {$availFormatted}, Jumlah diminta: {$requestedFormatted}.",
+                        'qty' => "Stok {$product->product_name} tidak mencukupi. Stok tersedia: {$availFormatted}, Jumlah diminta: {$requestedFormatted}.",
                     ]);
                 }
 
-                $basePrice = (float) ($product->base_price ?? 0);
-                $discountPercentage = 0.0;
-
-                if ($product->relationLoaded('discounts') || $product->discounts) {
-                    $matchedDiscount = $product->discounts
-                        ->filter(fn ($d) => $qty >= (int) $d->min_qty && (is_null($d->max_qty) || $qty <= (int) $d->max_qty))
-                        ->first();
-                    if ($matchedDiscount) {
-                        $discountPercentage = (float) $matchedDiscount->discount_percentage;
-                    }
-                }
-
-                $finalPrice = round($basePrice * (1 - ($discountPercentage / 100)), 2);
-                $lineTotal = round($qty * $finalPrice, 2);
-
                 DeliveryOrderItem::query()->create([
                     'delivery_order_id' => $deliveryOrder->id,
-                    'product_id' => $item['product_id'],
+                    'product_id' => $product->id,
                     'qty' => $qty,
-                    'base_price' => $basePrice,
-                    'discount_percentage' => $discountPercentage,
-                    'final_price' => $finalPrice,
-                    'line_total' => $lineTotal,
+                    'base_price' => $item['base_price'],
+                    'discount_percentage' => $item['discount_percentage'],
+                    'final_price' => $item['final_price'],
+                    'line_total' => $item['line_total'],
                 ]);
 
-                $stockBalance->qty_reserved = (float) $stockBalance->qty_reserved + $item['qty'];
+                $stockBalance->qty_reserved = (float) $stockBalance->qty_reserved + $qty;
                 $stockBalance->save();
 
-                $totalAmount += $lineTotal;
+                $totalAmount += $item['line_total'];
             }
 
             $deliveryOrder->update([

@@ -16,6 +16,7 @@ use Maatwebsite\Excel\Concerns\WithStartRow;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class DailySalesImport implements ToCollection, WithStartRow, SkipsEmptyRows
 {
@@ -51,13 +52,77 @@ class DailySalesImport implements ToCollection, WithStartRow, SkipsEmptyRows
                     $dueDate = $doDate;
                 }
 
-                $qty = $this->toDecimal($row[16]);
-                $price = $this->toDecimal($row[15]);
-                $discountRate = $this->toDecimal($row[14]);
-                $amount = $this->toDecimal($row[17]);
+                $qtyRaw = $this->toDecimal($row[16]);
+                $excelPrice = $this->toDecimal($row[15]);       // PRICE: harga satuan bersih per strata
+                $excelDiscount = $this->toDecimal($row[14]);    // DISCOUNT: fraksi (0.02 = 2%)
+                $amount = $this->toDecimal($row[17]);           // AMOUNT: total baris
                 $cash = $this->toDecimal($row[18]);
                 $transfer = $this->toDecimal($row[19]);
-                $receivable = $this->toDecimal($row[21]);
+
+                if ($qtyRaw <= 0 || floor($qtyRaw) !== $qtyRaw) {
+                    throw ValidationException::withMessages([
+                        'file_master' => "Qty tidak valid pada faktur {$noFaktur} produk {$itemCode}: "
+                            . "'{$row[16]}'. Qty harus bilangan bulat lebih dari 0; "
+                            . 'kolom qty DO/invoice bertipe integer.',
+                    ]);
+                }
+
+                $qty = (int) $qtyRaw;
+
+                if ($excelPrice <= 0) {
+                    throw ValidationException::withMessages([
+                        'file_master' => "Harga (PRICE) tidak valid pada faktur {$noFaktur} produk {$itemCode}: "
+                            . "'{$row[15]}'. Import transaksi dengan harga nol/tidak valid tidak diizinkan.",
+                    ]);
+                }
+
+                if ($excelDiscount < 0 || $excelDiscount > 1) {
+                    throw ValidationException::withMessages([
+                        'file_master' => "Diskon (DISCOUNT) tidak valid pada faktur {$noFaktur} produk {$itemCode}: "
+                            . "'{$row[14]}'. Diskon workbook harus berupa fraksi antara 0 dan 1 (contoh 0.02 = 2%).",
+                    ]);
+                }
+
+                if ($amount <= 0) {
+                    throw ValidationException::withMessages([
+                        'file_master' => "AMOUNT tidak valid pada faktur {$noFaktur} produk {$itemCode}: "
+                            . "'{$row[17]}'. Total baris harus lebih dari 0.",
+                    ]);
+                }
+
+                // Diskon mengikuti product_discounts (aturan yang sama dengan
+                // DeliveryOrderService). Bila tidak ada baris yang cocok,
+                // pakai kolom DISCOUNT workbook yang terbukti berupa fraksi.
+                $matchedDiscount = $product->discountForQty($qty);
+                $discountPercentage = $matchedDiscount
+                    ? round((float) $matchedDiscount->discount_percentage, 2)
+                    : round($excelDiscount * 100, 2);
+
+                if ($discountPercentage < 0 || $discountPercentage >= 100) {
+                    throw ValidationException::withMessages([
+                        'file_master' => "Diskon produk {$itemCode} untuk qty {$qty} tidak valid "
+                            . "({$discountPercentage}%). Diskon harus >= 0 dan < 100.",
+                    ]);
+                }
+
+                // PRICE pada workbook adalah harga bersih per strata, sedangkan
+                // AMOUNT adalah total baris. base_price diturunkan agar konsisten
+                // dengan final = base x (1 - diskon%).
+                $finalPrice = $excelPrice;
+                $basePrice = $discountPercentage > 0
+                    ? round($finalPrice / (1 - ($discountPercentage / 100)), 2)
+                    : $finalPrice;
+
+                // Template invoice memakai AMOUNT = PRICE x QTY. Tolak data
+                // historis yang tidak konsisten agar invoice tidak menampilkan
+                // angka yang saling bertentangan.
+                $expectedAmount = round($qty * $finalPrice, 2);
+                if (abs($amount - $expectedAmount) > 0.01) {
+                    throw ValidationException::withMessages([
+                        'file_master' => "AMOUNT tidak konsisten pada faktur {$noFaktur} produk {$itemCode}: "
+                            . "AMOUNT {$amount}, tetapi PRICE x QTY = {$expectedAmount}.",
+                    ]);
+                }
 
                 // ==========================================
                 // 1. BUAT DELIVERY ORDER & POTONG STOK
@@ -92,11 +157,13 @@ class DailySalesImport implements ToCollection, WithStartRow, SkipsEmptyRows
                 DeliveryOrderItem::query()->updateOrCreate(
                     ['delivery_order_id' => $deliveryOrder->id, 'product_id' => $product->id],
                     [
-                        'tier_code'     => trim($row[12] ?? ''),
-                        'qty'           => $qty,
-                        'unit_price'    => $price,
-                        'discount_rate' => $discountRate,
-                        'line_total'    => $amount,
+                        'qty' => $qty,
+                        'base_price' => $basePrice,
+                        'discount_percentage' => $discountPercentage,
+                        // Simpan nilai kanonik qty x final_price (bukan AMOUNT
+                        // mentah) agar line_total selalu konsisten.
+                        'final_price' => $finalPrice,
+                        'line_total' => $expectedAmount,
                     ]
                 );
 
@@ -125,11 +192,11 @@ class DailySalesImport implements ToCollection, WithStartRow, SkipsEmptyRows
                 InvoiceItem::query()->updateOrCreate(
                     ['invoice_id' => $invoice->id, 'product_id' => $product->id],
                     [
-                        'tier_code'     => trim($row[12] ?? ''),
-                        'qty'           => $qty,
-                        'unit_price'    => $price,
-                        'discount_rate' => $discountRate,
-                        'line_total'    => $amount,
+                        'qty' => $qty,
+                        'base_price' => $basePrice,
+                        'discount_percentage' => $discountPercentage,
+                        'final_price' => $finalPrice,
+                        'line_total' => $expectedAmount,
                     ]
                 );
 

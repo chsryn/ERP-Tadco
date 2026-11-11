@@ -23,10 +23,9 @@ class StoreDeliveryOrderRequest extends FormRequest
             'product_id.*' => ['nullable', 'exists:products,id'],
 
             'qty' => ['required', 'array'],
-            'qty.*' => ['nullable', 'numeric', 'min:0.0001'],
-
-            'tier_code' => ['nullable', 'array'],
-            'tier_code.*' => ['nullable', 'in:S1,S2,S3,S4,S5'],
+            // Kolom qty DO/invoice bertipe integer. Jangan menerima desimal
+            // agar tidak terjadi pemotongan presisi diam-diam.
+            'qty.*' => ['nullable', 'integer', 'min:1'],
         ];
     }
 
@@ -34,6 +33,8 @@ class StoreDeliveryOrderRequest extends FormRequest
     {
         return [
             'planned_delivery_date.after_or_equal' => 'Rencana Tanggal Kirim tidak boleh mendahului Tanggal DO.',
+            'qty.*.integer' => 'Qty harus bilangan bulat. Qty desimal tidak didukung.',
+            'qty.*.min' => 'Qty minimal 1.',
         ];
     }
 
@@ -42,17 +43,14 @@ class StoreDeliveryOrderRequest extends FormRequest
         $rows = [];
         $productIds = $this->input('product_id', []);
         $qtys = $this->input('qty', []);
-        $tierCodes = $this->input('tier_code', []);
 
         foreach ($productIds as $index => $productId) {
             $qty = $qtys[$index] ?? null;
-            $tierCode = $tierCodes[$index] ?? null;
 
-            if ($productId && $qty) {
+            if ($productId && $qty !== null && $qty !== '') {
                 $rows[] = [
                     'product_id' => (int) $productId,
-                    'qty' => (float) $qty,
-                    'tier_code' => $tierCode,
+                    'qty' => (int) $qty,
                 ];
             }
         }

@@ -120,7 +120,7 @@ flowchart LR
 
 Detail perilaku:
 
-- **DO dibuat** → status `validated`, stok **direservasi** (`qty_reserved += qty`) setelah cek `qty_available - qty_reserved` cukup. Harga memakai `products.base_price` dikurangi `product_discounts` yang cocok dengan qty.
+- **DO dibuat** → status `validated`, stok **direservasi** (`qty_reserved += qty`) setelah cek `qty_available - qty_reserved` cukup. Harga memakai `products.base_price` dikurangi `product_discounts` yang cocok dengan qty. DO **ditolak** jika produk tidak aktif, `base_price` tidak valid, qty bukan bilangan bulat positif, atau strata diskon tumpang tindih.
 - **Shipment dibuat** → status `shipped`, stok **dipotong** (`qty_available -=`, `qty_reserved -=`) dan `stock_movements` tipe `out` dicatat lewat `StockService`. DO menjadi `shipped`.
 - **Mark received** → shipment `received`, DO `delivered`. Tidak memotong stok lagi.
 - **Invoice** dibuat **manual** dari DO berstatus `shipped`; item disalin, `due_date = invoice_date + payment_term_days`, status `unpaid`.
@@ -146,6 +146,18 @@ Yang **sudah** ada: supplier, data pembelian produk, PO draft/confirm/cancel, no
 Yang **belum** ada: ekspor PDF, kirim PO via email/WhatsApp.
 
 **PO dan Purchase Receipt tidak menyentuh stok.** Stok hanya bertambah saat action **Process Stock IN** dijalankan pada detail receipt (SCM-07), sekali per receipt.
+
+### 5.3 Kebijakan harga, diskon, dan kuantitas (Plan A)
+
+- **Sumber harga.** `products.base_price` adalah harga jual dasar. Harga transaksi dihitung `final_price = round(base_price × (1 − discount_percentage/100), 2)` dan `line_total = round(qty × final_price, 2)`.
+- **Diskon strata.** `product_discounts` dipilih berdasarkan `min_qty ≤ qty ≤ max_qty` (`max_qty` kosong = tanpa batas atas). Pemilihan tidak bergantung urutan database. Jika lebih dari satu strata cocok (overlap/duplikat), transaksi **ditolak** dengan pesan spesifik produk; aplikasi tidak memilih salah satu secara acak.
+- **Validasi harga sebelum DO.** `DeliveryOrderService` menolak produk yang tidak ditemukan, `is_active = false`, `base_price ≤ 0`, qty bukan bilangan bulat positif, diskon di luar 0–100, atau `final_price ≤ 0`. Validasi dilakukan sebelum penulisan; kegagalan tidak meninggalkan DO/item/reservasi stok parsial.
+- **Invoice.** `InvoiceService` menyalin snapshot DO dan menolak item dengan harga nol, qty ≤ 0, diskon tidak valid, atau `line_total` yang tidak sama dengan `qty × final_price` (toleransi pembulatan Rp0,01).
+- **Semantik template invoice.** Kolom `PRICE` pada template adalah harga bersih per unit (`final_price`), `QTY` adalah qty, dan `AMOUNT = PRICE × QTY`. Ekspor menulis `final_price` ke kolom F dan `line_total` ke kolom H, sehingga diskon tidak dihitung dua kali.
+- **Kuantitas integer.** Kolom `delivery_order_items.qty` dan `invoice_items.qty` bertipe integer. Request DO, `DeliveryOrderService`, `DailySalesImport`, dan validasi `min_qty`/`max_qty` menolak desimal. Perubahan ke qty desimal memerlukan migration dan keputusan bisnis terpisah.
+- **Import produk.** `ProductsImport` hanya menyelaraskan identitas (nama, UOM, segment). Produk baru dibuat `is_active = false` dan `base_price = 0` (default DB) karena workbook `LIST ITEM` asli tidak tersedia dan pemetaan harga belum terbukti. Produk lama tidak diubah `base_price`/`is_active`-nya saat import ulang. Produk baru harus diisi harga dan diaktifkan manual sebelum dapat dipakai transaksi.
+- **Import penjualan harian.** `DailySalesImport` memakai `product_discounts` bila ada; jika tidak, memakai kolom `DISCOUNT` workbook (fraksi). Harga `PRICE` workbook diperlakukan sebagai harga bersih. Import menolak qty desimal/nol, harga nol, diskon di luar 0–1, dan `AMOUNT` yang tidak konsisten dengan `PRICE × QTY`.
+- **Keterbatasan workbook.** Workbook master `LIST ITEM` tidak tersedia di repo/mesin. Pemetaan kolom harga S1–S4 belum dapat diverifikasi; jangan mengisi `product_discounts` dari workbook tanpa rentang qty yang valid.
 
 ---
 
@@ -366,10 +378,9 @@ routes/web.php          seluruh route web
 
 | Perintah | Hasil terakhir |
 | --- | --- |
-| `php artisan test --testsuite=Feature` | **157 passed**, 805 assertions |
-| `php artisan test` (polos) | gagal — `tests/Unit` tidak ada (pre-existing) |
+| `php artisan test` | **215 passed**, 1014 assertions, 0 skipped |
 
-Cakupan test yang ada: `PaymentServiceTest`, `InvoiceServiceTest`, `InvoiceModelTest`, `DeliveryOrderServiceTest`, `AiChatEndpointTest`, `SupplierTest` (11), `ProductPurchasingTest` (10), `PurchaseOrderTest` (25), `ReorderTest` (28), `PurchaseOrderPrintTest` (11), `PurchaseReceiptTest` (25), `PurchaseReceiptStockInTest` (15), `ScmEndToEndTest` (2), `PurchasingAccessControlTest` (11). Total Feature suite: 157 test / 805 assertion.
+Cakupan test yang ada: `PaymentServiceTest`, `InvoiceServiceTest`, `InvoiceModelTest`, `DeliveryOrderServiceTest`, `ProductDiscountTest`, `ProductControllerTest`, `ExcelImportExportTest`, `AiChatEndpointTest`, `SupplierTest`, `ProductPurchasingTest`, `PurchaseOrderTest`, `ReorderTest`, `PurchaseOrderPrintTest`, `PurchaseReceiptTest`, `PurchaseReceiptStockInTest`, `ScmEndToEndTest`, `PurchasingAccessControlTest`. Test baru Plan A mencakup harga nol, produk inactive, qty desimal, overlap strata, rollback DO/invoice, dan konsistensi `final_price × qty = line_total`.
 
 Test memakai SQLite in-memory (`phpunit.xml`) dengan `RefreshDatabase`. **Jangan** mengarahkan test ke database MySQL dev — `RefreshDatabase` akan mengosongkannya.
 
@@ -391,12 +402,21 @@ Keamanan / konsistensi:
 7. Modul ERP lama masih `auth` saja; registrasi publik; `is_active` user diabaikan saat login.
 8. Perhitungan uang tidak seragam (float di DO/Invoice/Payment vs integer sen di PO).
 
-Kode yang sudah tidak sinkron (pre-existing, belum diperbaiki):
+Kode yang sudah tidak sinkron:
 
-9. `app/Models/ProductPrice.php` memakai tabel `product_prices` yang **tidak punya migration**.
-10. `app/Exports/StockReportExport.php` masih mereferensikan relasi `warehouse` yang sudah dihapus.
-11. `app/Imports/ProductsImport.php` menulis kolom `uom_secondary` yang tidak ada.
-12. `ProductController@index` memakai rantai `orWhere` tanpa grouping sehingga filter bisa bocor.
+9. ~~`app/Models/ProductPrice.php` memakai tabel `product_prices` yang **tidak punya migration**~~ — sudah diperbaiki (Plan A, 2026-11-11): model dihapus, harga/diskon memakai `product_discounts`.
+10. ~~`app/Exports/StockReportExport.php` masih mereferensikan relasi `warehouse` yang sudah dihapus~~ — sudah diperbaiki (Plan A, 2026-11-11): kolom Gudang dihapus.
+11. ~~`app/Imports/ProductsImport.php` menulis kolom `uom_secondary` yang tidak ada~~ — sudah diperbaiki (Plan A, 2026-11-11): import hanya menyelaraskan identitas produk + validasi UOM `BOX`/`SACK`.
+12. ~~`ProductController@index` memakai rantai `orWhere` tanpa grouping sehingga filter bisa bocor~~ — sudah diperbaiki (Plan A, 2026-11-11): kondisi pencarian dibungkus closure.
+
+Risiko data dan keputusan bisnis yang masih terbuka:
+
+13. **D9 — `product_discounts` tanpa unique constraint.** Tabel tidak mencegah duplikasi `product_id + strata_level` maupun rentang qty yang tumpang tindih. Aplikasi sekarang mendeteksi overlap/duplikat saat runtime dan menolak transaksi, tetapi belum ada migration/constraint. Keputusan perlu: tambah unique constraint dan/atau validasi database, atau jaga di level aplikasi.
+14. **D10 — qty DO/invoice bertipe integer.** Request DO, service, dan import sekarang menolak qty desimal agar tidak ada pemotongan presisi diam-diam. Jika bisnis membutuhkan qty desimal (mis. sebagian sack), diperlukan migration `qty` ke decimal + keputusan pembulatan dan tampilan.
+15. **Harga produk hasil import belum terisi.** Workbook `LIST ITEM` asli tidak tersedia, sehingga pemetaan kolom harga S1–S4 ke `base_price`/`product_discounts` belum terbukti. Produk baru hasil import sengaja `is_active = false` dan `base_price = 0`; pemilik data harus mengisi harga dan mengaktifkannya manual. Jangan mengisi harga tebakan.
+16. **Konsistensi data historis.** `DailySalesImport` memakai `PRICE` workbook sebagai harga bersih dan menolak baris yang `AMOUNT`-nya tidak sama dengan `PRICE × QTY`. Data historis yang tidak konsisten akan gagal import, bukan dikoreksi otomatis; perlu keputusan bisnis untuk membersihkan/memetakan ulang workbook lama.
+17. **Baris import tanpa customer/produk dikenal masih dilewati diam-diam** (`continue`) pada `DailySalesImport`. Perilaku ini pre-existing dan belum diubah; perlu keputusan apakah harus menjadi error atau tetap skip.
+18. **Snapshot harga DO → invoice tidak bisa direkonsiliasi dengan master.** Invoice menyalin `final_price`/`line_total` dari DO. Jika master `base_price`/diskon berubah setelah DO dibuat, invoice tetap memakai snapshot DO (memang disengaja), tetapi belum ada laporan audit untuk membandingkannya.
 
 ---
 

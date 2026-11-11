@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Customer;
 use App\Models\DeliveryOrder;
+use App\Models\DeliveryOrderItem;
 use App\Models\Product;
 use App\Models\ProductDiscount;
 use App\Models\StockBalance;
@@ -58,6 +59,230 @@ class DeliveryOrderServiceTest extends TestCase
         ]);
     }
 
+    private function doData(): array
+    {
+        return [
+            'customer_id' => $this->customer->id,
+            'do_date' => '2026-08-04',
+        ];
+    }
+
+    public function test_create_delivery_order_stores_net_price_without_double_discount(): void
+    {
+        // Harga dasar Rp100.000, diskon 2%, qty 2 -> harga bersih Rp98.000,
+        // line total Rp196.000. Diskon tidak boleh diterapkan dua kali.
+        $this->product->update(['base_price' => 100000]);
+        $this->product->discounts()->update(['discount_percentage' => 2]);
+
+        $deliveryOrder = $this->service->createDeliveryOrder(
+            $this->doData(),
+            [['product_id' => $this->product->id, 'qty' => 2]],
+            $this->user->id
+        );
+
+        $item = $deliveryOrder->items()->firstOrFail();
+
+        $this->assertSame(2, $item->qty);
+        $this->assertSame(100000.0, (float) $item->base_price);
+        $this->assertSame(2.0, (float) $item->discount_percentage);
+        $this->assertSame(98000.0, (float) $item->final_price);
+        $this->assertSame(196000.0, (float) $item->line_total);
+        $this->assertSame(
+            (float) $item->line_total,
+            (int) $item->qty * (float) $item->final_price
+        );
+        $this->assertSame(196000.0, (float) $deliveryOrder->total_amount);
+        $this->assertSame(
+            2.0,
+            (float) StockBalance::where('product_id', $this->product->id)->value('qty_reserved')
+        );
+    }
+
+    public function test_create_delivery_order_rejects_product_without_valid_price(): void
+    {
+        $this->product->update(['base_price' => 0]);
+
+        try {
+            $this->service->createDeliveryOrder(
+                $this->doData(),
+                [['product_id' => $this->product->id, 'qty' => 10]],
+                $this->user->id
+            );
+            $this->fail('DO seharusnya ditolak saat base_price produk tidak valid.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('belum memiliki harga dasar', $e->errors()['price'][0]);
+            $this->assertStringContainsString('PROD01', $e->errors()['price'][0]);
+        }
+
+        $this->assertSame(0, DeliveryOrder::count());
+        $this->assertSame(0, DeliveryOrderItem::count());
+        $this->assertSame(
+            0.0,
+            (float) StockBalance::where('product_id', $this->product->id)->value('qty_reserved')
+        );
+    }
+
+    public function test_create_delivery_order_rejects_inactive_product(): void
+    {
+        $this->product->update(['is_active' => false]);
+
+        try {
+            $this->service->createDeliveryOrder(
+                $this->doData(),
+                [['product_id' => $this->product->id, 'qty' => 10]],
+                $this->user->id
+            );
+            $this->fail('DO seharusnya ditolak untuk produk inactive.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('tidak aktif', $e->errors()['product_id'][0]);
+        }
+
+        $this->assertSame(0, DeliveryOrder::count());
+        $this->assertSame(0, DeliveryOrderItem::count());
+    }
+
+    public function test_create_delivery_order_rejects_missing_product(): void
+    {
+        try {
+            $this->service->createDeliveryOrder(
+                $this->doData(),
+                [['product_id' => 999999, 'qty' => 1]],
+                $this->user->id
+            );
+            $this->fail('DO seharusnya ditolak saat produk tidak ditemukan.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('tidak ditemukan', $e->errors()['product_id'][0]);
+        }
+
+        $this->assertSame(0, DeliveryOrder::count());
+        $this->assertSame(0, DeliveryOrderItem::count());
+    }
+
+    public function test_create_delivery_order_rejects_fractional_qty(): void
+    {
+        try {
+            $this->service->createDeliveryOrder(
+                $this->doData(),
+                [['product_id' => $this->product->id, 'qty' => 1.5]],
+                $this->user->id
+            );
+            $this->fail('DO seharusnya menolak qty desimal.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('bilangan bulat', $e->errors()['qty'][0]);
+        }
+
+        $this->assertSame(0, DeliveryOrder::count());
+        $this->assertSame(0, DeliveryOrderItem::count());
+        $this->assertSame(
+            0.0,
+            (float) StockBalance::where('product_id', $this->product->id)->value('qty_reserved')
+        );
+    }
+
+    public function test_create_delivery_order_rejects_zero_qty(): void
+    {
+        try {
+            $this->service->createDeliveryOrder(
+                $this->doData(),
+                [['product_id' => $this->product->id, 'qty' => 0]],
+                $this->user->id
+            );
+            $this->fail('DO seharusnya menolak qty nol.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('bilangan bulat lebih dari 0', $e->errors()['qty'][0]);
+        }
+
+        $this->assertSame(0, DeliveryOrder::count());
+        $this->assertSame(0, DeliveryOrderItem::count());
+    }
+
+    public function test_create_delivery_order_rejects_overlapping_discount_ranges(): void
+    {
+        // S1 (min 0, max null) dan S2 (min 0, max null) sama-sama cocok.
+        ProductDiscount::create([
+            'product_id' => $this->product->id,
+            'strata_level' => 'S2',
+            'min_qty' => 0,
+            'max_qty' => null,
+            'discount_percentage' => 5,
+        ]);
+
+        try {
+            $this->service->createDeliveryOrder(
+                $this->doData(),
+                [['product_id' => $this->product->id, 'qty' => 10]],
+                $this->user->id
+            );
+            $this->fail('DO seharusnya ditolak saat rentang strata tumpang tindih.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('lebih dari satu strata', $e->errors()['discount'][0]);
+        }
+
+        $this->assertSame(0, DeliveryOrder::count());
+        $this->assertSame(0, DeliveryOrderItem::count());
+    }
+
+    public function test_create_delivery_order_rejects_zero_final_price(): void
+    {
+        $this->product->discounts()->update(['discount_percentage' => 100]);
+
+        try {
+            $this->service->createDeliveryOrder(
+                $this->doData(),
+                [['product_id' => $this->product->id, 'qty' => 10]],
+                $this->user->id
+            );
+            $this->fail('DO seharusnya ditolak saat harga bersih menjadi nol.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('Harga bersih', $e->errors()['price'][0]);
+        }
+
+        $this->assertSame(0, DeliveryOrder::count());
+        $this->assertSame(0, DeliveryOrderItem::count());
+    }
+
+    public function test_create_delivery_order_is_fully_rolled_back_when_one_item_is_invalid(): void
+    {
+        $secondProduct = Product::create([
+            'product_code' => 'PROD02',
+            'product_name' => 'Produk Tanpa Harga',
+            'base_price' => 0,
+            'uom' => 'BOX',
+            'is_active' => true,
+        ]);
+
+        StockBalance::create([
+            'product_id' => $secondProduct->id,
+            'qty_available' => 100,
+            'qty_reserved' => 0,
+        ]);
+
+        try {
+            $this->service->createDeliveryOrder(
+                $this->doData(),
+                [
+                    ['product_id' => $this->product->id, 'qty' => 10],
+                    ['product_id' => $secondProduct->id, 'qty' => 5],
+                ],
+                $this->user->id
+            );
+            $this->fail('DO seharusnya ditolak seluruhnya jika salah satu item tidak valid.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('belum memiliki harga dasar', $e->errors()['price'][0]);
+        }
+
+        $this->assertSame(0, DeliveryOrder::count());
+        $this->assertSame(0, DeliveryOrderItem::count());
+        $this->assertSame(
+            0.0,
+            (float) StockBalance::where('product_id', $this->product->id)->value('qty_reserved')
+        );
+        $this->assertSame(
+            0.0,
+            (float) StockBalance::where('product_id', $secondProduct->id)->value('qty_reserved')
+        );
+    }
+
     public function test_create_delivery_order_successfully_reserves_stock(): void
     {
         $data = [
@@ -71,7 +296,6 @@ class DeliveryOrderServiceTest extends TestCase
             [
                 'product_id' => $this->product->id,
                 'qty' => 10,
-                'tier_code' => 'S1',
             ],
         ];
 
@@ -100,7 +324,6 @@ class DeliveryOrderServiceTest extends TestCase
             [
                 'product_id' => $this->product->id,
                 'qty' => 200, // Exceeds 100 available
-                'tier_code' => 'S1',
             ],
         ];
 
@@ -118,7 +341,6 @@ class DeliveryOrderServiceTest extends TestCase
             [
                 'product_id' => $this->product->id,
                 'qty' => 15,
-                'tier_code' => 'S1',
             ],
         ];
 
@@ -145,7 +367,6 @@ class DeliveryOrderServiceTest extends TestCase
             [
                 'product_id' => $this->product->id,
                 'qty' => 15,
-                'tier_code' => 'S1',
             ],
         ];
 

@@ -150,12 +150,15 @@ class InvoiceController extends Controller
 
             $productName = $item->product ? $item->product->product_name : 'Item Tidak Dikenal';
             $productCode = $item->product ? $item->product->product_code : '-';
+            $strata = $item->product?->discountForQty((float) $item->qty)?->strata_level ?? '';
 
             $sheet->setCellValue('A' . $currentRow, $productName);
-            $sheet->setCellValue('C' . $currentRow, $item->tier_code ?? ''); // Strata
+            $sheet->setCellValue('C' . $currentRow, $strata); // Strata dari product_discounts
             $sheet->setCellValue('D' . $currentRow, $productCode);
             $sheet->setCellValue('E' . $currentRow, ($item->discount_percentage ?? 0) / 100); // Diskon
-            $sheet->setCellValue('F' . $currentRow, $item->base_price ?? 0);
+            // Template memakai AMOUNT = PRICE x QTY. PRICE harus harga bersih
+            // (final_price), bukan base_price, agar tidak terjadi diskon ganda.
+            $sheet->setCellValue('F' . $currentRow, $item->final_price ?? 0);
             $sheet->setCellValue('G' . $currentRow, $item->qty ?? 0);
             $sheet->setCellValue('H' . $currentRow, $item->line_total ?? 0);
 

@@ -56,10 +56,10 @@ class InvoiceServiceTest extends TestCase
         DeliveryOrderItem::create([
             'delivery_order_id' => $this->deliveryOrder->id,
             'product_id' => $this->product->id,
-            'tier_code' => 'S1',
             'qty' => 5,
-            'unit_price' => 100000,
-            'discount_rate' => 0.0,
+            'base_price' => 100000,
+            'discount_percentage' => 0.0,
+            'final_price' => 100000,
             'line_total' => 500000.00,
         ]);
     }
@@ -94,5 +94,89 @@ class InvoiceServiceTest extends TestCase
         ];
 
         $this->service->createInvoice($data, $this->user->id);
+    }
+
+    public function test_create_invoice_rejects_do_item_with_zero_price(): void
+    {
+        $this->deliveryOrder->items()->update([
+            'base_price' => 0,
+            'final_price' => 0,
+            'line_total' => 0,
+        ]);
+
+        try {
+            $this->service->createInvoice([
+                'delivery_order_id' => $this->deliveryOrder->id,
+                'invoice_date' => '2026-08-04',
+            ], $this->user->id);
+            $this->fail('Invoice seharusnya ditolak saat item DO memiliki harga nol.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('harga nol/tidak valid', $e->errors()['delivery_order_id'][0]);
+            $this->assertStringContainsString('PROD01', $e->errors()['delivery_order_id'][0]);
+        }
+
+        $this->assertSame(0, Invoice::count());
+        $this->assertDatabaseCount('invoice_items', 0);
+    }
+
+    public function test_create_invoice_rejects_zero_qty_item(): void
+    {
+        $this->deliveryOrder->items()->update(['qty' => 0]);
+
+        try {
+            $this->service->createInvoice([
+                'delivery_order_id' => $this->deliveryOrder->id,
+                'invoice_date' => '2026-08-04',
+            ], $this->user->id);
+            $this->fail('Invoice seharusnya ditolak saat qty item DO nol.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('Qty item', $e->errors()['delivery_order_id'][0]);
+        }
+
+        $this->assertSame(0, Invoice::count());
+    }
+
+    public function test_create_invoice_rejects_inconsistent_line_total(): void
+    {
+        $this->deliveryOrder->items()->update(['line_total' => 400000]);
+
+        try {
+            $this->service->createInvoice([
+                'delivery_order_id' => $this->deliveryOrder->id,
+                'invoice_date' => '2026-08-04',
+            ], $this->user->id);
+            $this->fail('Invoice seharusnya ditolak saat line_total tidak konsisten.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('tidak konsisten', $e->errors()['delivery_order_id'][0]);
+        }
+
+        $this->assertSame(0, Invoice::count());
+    }
+
+    public function test_create_invoice_with_discount_copies_final_price_and_totals(): void
+    {
+        $this->deliveryOrder->items()->update([
+            'qty' => 10,
+            'base_price' => 1000,
+            'discount_percentage' => 2,
+            'final_price' => 980,
+            'line_total' => 9800,
+        ]);
+
+        $invoice = $this->service->createInvoice([
+            'delivery_order_id' => $this->deliveryOrder->id,
+            'invoice_date' => '2026-08-04',
+        ], $this->user->id);
+
+        $this->assertSame(9800.0, (float) $invoice->grand_total);
+        $this->assertSame(9800.0, (float) $invoice->receivable_amount);
+
+        $invoiceItem = $invoice->items()->first();
+        $this->assertSame(980.0, (float) $invoiceItem->final_price);
+        $this->assertSame(9800.0, (float) $invoiceItem->line_total);
+        $this->assertSame(
+            (float) $invoiceItem->line_total,
+            (int) $invoiceItem->qty * (float) $invoiceItem->final_price
+        );
     }
 }

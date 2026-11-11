@@ -61,7 +61,46 @@ class InvoiceService
             $subtotal = 0.0;
 
             foreach ($deliveryOrder->items as $item) {
-                $subtotal += round((float) $item->line_total, 2);
+                $productLabel = $item->product
+                    ? "{$item->product->product_code} - {$item->product->product_name}"
+                    : "produk #{$item->product_id}";
+
+                $qty = (int) $item->qty;
+                if ($qty <= 0) {
+                    throw ValidationException::withMessages([
+                        'delivery_order_id' => "Qty item {$productLabel} pada DO tidak valid ({$item->qty}). "
+                            . 'Qty harus bilangan bulat lebih dari 0.',
+                    ]);
+                }
+
+                $basePrice = round((float) $item->base_price, 2);
+                $discPerc = round((float) $item->discount_percentage, 2);
+                $finalPrice = round((float) $item->final_price, 2);
+                $lineTotal = round((float) $item->line_total, 2);
+
+                if ($basePrice <= 0 || $finalPrice <= 0 || $lineTotal <= 0) {
+                    throw ValidationException::withMessages([
+                        'delivery_order_id' => "Item {$productLabel} pada DO memiliki harga nol/tidak valid "
+                            . "(base_price: {$basePrice}, final_price: {$finalPrice}, line_total: {$lineTotal}). "
+                            . 'Invoice tidak bisa dibuat.',
+                    ]);
+                }
+
+                if ($discPerc < 0 || $discPerc > 100) {
+                    throw ValidationException::withMessages([
+                        'delivery_order_id' => "Diskon item {$productLabel} pada DO tidak valid ({$discPerc}%).",
+                    ]);
+                }
+
+                $expectedLineTotal = round($qty * $finalPrice, 2);
+                if (abs($lineTotal - $expectedLineTotal) > 0.01) {
+                    throw ValidationException::withMessages([
+                        'delivery_order_id' => "Total baris item {$productLabel} tidak konsisten dengan qty x final_price "
+                            . "(line_total: {$lineTotal}, seharusnya: {$expectedLineTotal}).",
+                    ]);
+                }
+
+                $subtotal += $lineTotal;
             }
 
             $subtotal = round($subtotal, 2);

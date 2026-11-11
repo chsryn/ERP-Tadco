@@ -3,14 +3,20 @@
 namespace App\Imports;
 
 use App\Models\Product;
-use App\Models\ProductPrice;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithStartRow;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 
 class ProductsImport implements ToCollection, WithStartRow, SkipsEmptyRows
 {
+    /**
+     * UOM yang valid, mengikuti enum kolom products.uom.
+     */
+    private const VALID_UOM = ['BOX', 'SACK'];
+
     public function startRow(): int
     {
         return 3;
@@ -18,80 +24,46 @@ class ProductsImport implements ToCollection, WithStartRow, SkipsEmptyRows
 
     public function collection(Collection $rows): void
     {
-        foreach ($rows as $row) {
-            $uom = trim($row[0] ?? '');
-            $segment = trim($row[1] ?? '');
-            $productName = trim($row[2] ?? '');
-            $productCode = trim($row[3] ?? '');
-            $uomSecondary = trim($row[4] ?? '');
+        DB::transaction(function () use ($rows) {
+            foreach ($rows as $index => $row) {
+                $uom = strtoupper(trim((string) ($row[0] ?? '')));
+                $segment = trim((string) ($row[1] ?? ''));
+                $productName = trim((string) ($row[2] ?? ''));
+                $productCode = trim((string) ($row[3] ?? ''));
 
-            if ($productCode === '' || $productName === '') {
-                continue;
-            }
+                if ($productCode === '' || $productName === '') {
+                    continue;
+                }
 
-            $product = Product::updateOrCreate(
-                [
+                if (!in_array($uom, self::VALID_UOM, true)) {
+                    $excelRow = $this->startRow() + $index;
+
+                    throw ValidationException::withMessages([
+                        'file_master' => "UOM tidak valid pada baris {$excelRow} (produk {$productCode}): "
+                            . "'{$uom}'. Nilai yang diizinkan hanya BOX atau SACK.",
+                    ]);
+                }
+
+                // Kolom harga per strata pada LIST ITEM tidak dapat dipetakan ke
+                // product_discounts karena workbook tidak memuat min_qty/max_qty.
+                // Import ini hanya menyelaraskan data identitas produk.
+                //
+                // Fail-safe: produk baru tidak diberi harga tebakan dan dibuat
+                // inactive agar tidak bisa dipakai transaksi sampai harganya
+                // dikonfigurasi. Produk lama tidak diubah base_price/is_active-nya.
+                $product = Product::query()->firstOrNew([
                     'product_code' => $productCode,
-                ],
-                [
-                    'product_name'  => $productName,
-                    'uom'           => $uom,
-                    'uom_secondary' => $uomSecondary,
-                    'segment'       => $segment,
-                    'is_active'     => true,
-                ]
-            );
+                ]);
 
-            $prices = [
-                [
-                    'tier_code' => 'S1',
-                    'price' => $this->toDecimal($row[5] ?? 0),
-                    'discount_rate' => $this->toDecimal($row[6] ?? 0),
-                ],
-                [
-                    'tier_code' => 'S2',
-                    'price' => $this->toDecimal($row[7] ?? 0),
-                    'discount_rate' => $this->toDecimal($row[8] ?? 0),
-                ],
-                [
-                    'tier_code' => 'S3',
-                    'price' => $this->toDecimal($row[9] ?? 0),
-                    'discount_rate' => $this->toDecimal($row[10] ?? 0),
-                ],
-                [
-                    'tier_code' => 'S4',
-                    'price' => $this->toDecimal($row[11] ?? 0),
-                    'discount_rate' => $this->toDecimal($row[12] ?? 0),
-                ],
-            ];
+                if (!$product->exists) {
+                    $product->is_active = false;
+                }
 
-            foreach ($prices as $priceData) {
-                ProductPrice::updateOrCreate(
-                    [
-                        'product_id' => $product->id,
-                        'tier_code' => $priceData['tier_code'],
-                    ],
-                    [
-                        'price' => $priceData['price'],
-                        'discount_rate' => $priceData['discount_rate'],
-                        'valid_from' => null,
-                        'valid_until' => null,
-                    ]
-                );
+                $product->product_name = $productName;
+                $product->uom = $uom;
+                $product->segment = $segment;
+                $product->save();
             }
-        }
-    }
-
-    private function toDecimal(mixed $value): float
-    {
-        if ($value === null || $value === '') {
-            return 0;
-        }
-
-        if (is_string($value)) {
-            $value = str_replace(',', '.', $value);
-        }
-
-        return (float) $value;
+        });
     }
 }
